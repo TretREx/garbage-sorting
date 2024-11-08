@@ -6,8 +6,6 @@ from PyQt5.QtCore import QThread, pyqtSignal, QCoreApplication
 
 class SerialThread(QThread):
     data_received = pyqtSignal(str)
-    status_update = pyqtSignal(str)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.HEADER = 0x55
@@ -79,7 +77,9 @@ class SerialThread(QThread):
         self.uart_running = False
 
     def uart_start(self):
+        # self.serial_port.open()
         self.uart_running = True
+
 
 if __name__ == "__main__":
     app = QCoreApplication(sys.argv)
