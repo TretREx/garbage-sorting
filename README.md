@@ -1,4 +1,4 @@
-main.py 程序运行入口
+main.py 主程序运行入口
 cap.py 用于拍背景
 GUI.py QT基本组件
 images.py 用于进行图片比对
