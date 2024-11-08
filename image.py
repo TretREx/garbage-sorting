@@ -1,3 +1,4 @@
+# 图片对比，检测是否有物体
 import cv2
 import numpy as np
 import time

@@ -1,3 +1,4 @@
+# QT GUI界面
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QTextEdit, QComboBox, QTableWidget, QTableWidgetItem
 from PyQt5.QtGui import QImage, QPixmap

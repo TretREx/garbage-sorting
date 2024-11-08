@@ -129,7 +129,6 @@ class YoLov7TRT:
     def destroy(self):
         self.ctx.pop()
 
-    # categories = ['Hazardous waste', 'Kitchen waste', 'Other waste', 'Recyclable waste']
 def plot_boxes(img, boxes, labels, colors):
     # Initialize a dictionary to count each category
     category_count = {label: 0 for label in labels}
