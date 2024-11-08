@@ -1,0 +1,2996 @@
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.arch armv7-m
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.file	"motor.c"
+  14              		.text
+  15              	.Ltext0:
+  16              		.cfi_sections	.debug_frame
+  17              		.global	__aeabi_f2uiz
+  18              		.global	__aeabi_fcmpgt
+  19              		.section	.text.Motor_SetSpeed,"ax",%progbits
+  20              		.align	1
+  21              		.global	Motor_SetSpeed
+  22              		.syntax unified
+  23              		.thumb
+  24              		.thumb_func
+  26              	Motor_SetSpeed:
+  27              	.LVL0:
+  28              	.LFB74:
+  29              		.file 1 "BSP/motor.c"
+   1:BSP/motor.c   **** #include "motor.h"
+   2:BSP/motor.c   **** #include "uart.h"
+   3:BSP/motor.c   **** 
+   4:BSP/motor.c   **** /*******任务句柄*********/
+   5:BSP/motor.c   **** xTaskHandle MotorHandle;
+   6:BSP/motor.c   **** 
+   7:BSP/motor.c   **** SemaphoreHandle_t xMotorSemaphore[3];
+   8:BSP/motor.c   **** 
+   9:BSP/motor.c   **** /* 三级红外对射定时器 */
+  10:BSP/motor.c   **** TimerHandle_t xOneShotTimer1;
+  11:BSP/motor.c   **** TimerHandle_t xOneShotTimer2;
+  12:BSP/motor.c   **** TimerHandle_t xOneShotTimer3;
+  13:BSP/motor.c   **** 
+  14:BSP/motor.c   **** /* 对射检测定时器 */
+  15:BSP/motor.c   **** TimerHandle_t KeyTimerHandle;
+  16:BSP/motor.c   **** 
+  17:BSP/motor.c   **** /* 获取传送带速度定时器 */
+  18:BSP/motor.c   **** TimerHandle_t SpeedGetHandle;
+  19:BSP/motor.c   **** /* 对射定义 */
+  20:BSP/motor.c   **** KEY key[NUM_Lights];
+  21:BSP/motor.c   **** MOTOR motor1;
+  22:BSP/motor.c   **** MOTOR motor2;
+  23:BSP/motor.c   **** MOTOR motor3;
+  24:BSP/motor.c   **** MOTOR motor4;
+  25:BSP/motor.c   **** 
+  26:BSP/motor.c   **** 
+  27:BSP/motor.c   **** void Motor_Task(void *argument)
+  28:BSP/motor.c   **** {
+  29:BSP/motor.c   **** 
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 2
+
+
+  30:BSP/motor.c   **** 	Motor_Config();//电机初始化
+  31:BSP/motor.c   **** 
+  32:BSP/motor.c   **** 	motor1._SPEED = 500;//设置速度补偿
+  33:BSP/motor.c   **** 	motor2._SPEED = 600;
+  34:BSP/motor.c   **** 	motor3._SPEED = 350;
+  35:BSP/motor.c   **** 
+  36:BSP/motor.c   **** 	motor1.ResetTime = 2000;
+  37:BSP/motor.c   **** 	motor2.ResetTime = 2000;
+  38:BSP/motor.c   **** 	motor3.ResetTime = 2000;
+  39:BSP/motor.c   **** 
+  40:BSP/motor.c   **** 	xTimerChangePeriod(xOneShotTimer1,motor1.ResetTime,0);
+  41:BSP/motor.c   **** 	xTimerChangePeriod(xOneShotTimer1,motor1.ResetTime,0);
+  42:BSP/motor.c   **** 	xTimerChangePeriod(xOneShotTimer1,motor1.ResetTime,0);
+  43:BSP/motor.c   **** 
+  44:BSP/motor.c   **** 	motor1.CompSpeed = motor1._SPEED;
+  45:BSP/motor.c   **** 	motor2.CompSpeed = motor2._SPEED;
+  46:BSP/motor.c   **** 	motor3.CompSpeed = motor3._SPEED;
+  47:BSP/motor.c   **** 
+  48:BSP/motor.c   **** 	xTimerStart(SpeedGetHandle,0);
+  49:BSP/motor.c   **** 	xTimerStart(KeyTimerHandle,0);
+  50:BSP/motor.c   **** 
+  51:BSP/motor.c   **** 	UartPrintf("Motor Task");
+  52:BSP/motor.c   **** 	PID_Init(&motor1.TPID,1 ,0.1,0.05,0,-999,999 );
+  53:BSP/motor.c   **** 	PID_Init(&motor2.TPID,1 ,0.5,0.05,0,-999,999);
+  54:BSP/motor.c   **** 	PID_Init(&motor3.TPID,1 ,0.5,0.05,0,-999,999);
+  55:BSP/motor.c   **** 
+  56:BSP/motor.c   **** 	uint8_t timers = 0;
+  57:BSP/motor.c   **** 	while(1)
+  58:BSP/motor.c   **** 	{
+  59:BSP/motor.c   **** 		timers++;
+  60:BSP/motor.c   **** 		if(timers == 10)
+  61:BSP/motor.c   **** 		{
+  62:BSP/motor.c   **** 			UartPrintf("M1:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f",
+  63:BSP/motor.c   **** 						motor1.TPID.setpoint,motor1.TPID.output,motor1.speed,
+  64:BSP/motor.c   **** 						motor1.CompSpeed,motor1.TPID.integral*motor1.TPID.Ki,motor1.TPID.previous_error*motor1.TPID.K
+  65:BSP/motor.c   **** 
+  66:BSP/motor.c   **** 			UartPrintf("M2:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f",
+  67:BSP/motor.c   **** 						motor2.TPID.setpoint,motor2.TPID.output,motor2.speed,
+  68:BSP/motor.c   **** 						motor2.CompSpeed,motor2.TPID.integral*motor2.TPID.Ki,motor2.TPID.previous_error*motor2.TPID.K
+  69:BSP/motor.c   **** 
+  70:BSP/motor.c   **** 			UartPrintf("M3:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f",
+  71:BSP/motor.c   **** 						motor3.TPID.setpoint,motor3.TPID.output,motor3.speed,
+  72:BSP/motor.c   **** 						motor3.CompSpeed,motor3.TPID.integral*motor3.TPID.Ki,motor3.TPID.previous_error*motor3.TPID.K
+  73:BSP/motor.c   **** 
+  74:BSP/motor.c   **** 			timers = 0;
+  75:BSP/motor.c   **** 		}
+  76:BSP/motor.c   **** 
+  77:BSP/motor.c   **** 
+  78:BSP/motor.c   **** 		if(key[0].flag)
+  79:BSP/motor.c   **** 		{
+  80:BSP/motor.c   **** 			PID_setMotorPoint(&motor1,-1*fabs(motor1.TPID.setpoint));
+  81:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+  82:BSP/motor.c   **** 			Motor_stop(1);
+  83:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+  84:BSP/motor.c   **** 			key[0].flag =0;
+  85:BSP/motor.c   **** 		}
+  86:BSP/motor.c   **** 		if(key[1].flag)
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 3
+
+
+  87:BSP/motor.c   **** 		{
+  88:BSP/motor.c   **** 			Motor_stop(1);
+  89:BSP/motor.c   **** 			PID_setMotorPoint(&motor2,-1*fabs(motor2.TPID.setpoint));
+  90:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+  91:BSP/motor.c   **** 			Motor_stop(2);
+  92:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+  93:BSP/motor.c   **** 			xTimerReset(xOneShotTimer2,0);
+  94:BSP/motor.c   ****             key[1].flag =0;
+  95:BSP/motor.c   ****         }
+  96:BSP/motor.c   **** 		if(key[2].flag)
+  97:BSP/motor.c   **** 		{
+  98:BSP/motor.c   **** 			Motor_stop(1);
+  99:BSP/motor.c   **** 			Motor_stop(2);
+ 100:BSP/motor.c   **** 			PID_setMotorPoint(&motor3,-1*fabs(motor3.TPID.setpoint));
+ 101:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 102:BSP/motor.c   **** 			Motor_stop(3);
+ 103:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(2000));
+ 104:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+ 105:BSP/motor.c   **** 			xTimerReset(xOneShotTimer2,0);
+ 106:BSP/motor.c   **** 			xTimerReset(xOneShotTimer3,0);
+ 107:BSP/motor.c   ****             key[2].flag =0;
+ 108:BSP/motor.c   **** 		}
+ 109:BSP/motor.c   **** 		vTaskDelay(pdMS_TO_TICKS(20));
+ 110:BSP/motor.c   **** 	}
+ 111:BSP/motor.c   **** }
+ 112:BSP/motor.c   **** 
+ 113:BSP/motor.c   **** //电机速度初始化设置
+ 114:BSP/motor.c   **** void Motor_Config()
+ 115:BSP/motor.c   **** {
+ 116:BSP/motor.c   **** 	Motor_SetSpeed(1,0);
+ 117:BSP/motor.c   **** 	Motor_SetSpeed(2,0);
+ 118:BSP/motor.c   **** 	Motor_SetSpeed(3,0);
+ 119:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+ 120:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+ 121:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+ 122:BSP/motor.c   **** }
+ 123:BSP/motor.c   **** 
+ 124:BSP/motor.c   **** 
+ 125:BSP/motor.c   **** // 设置电机的方向和速度
+ 126:BSP/motor.c   **** void Motor_SetSpeed(uint8_t motor,float speed) {
+  30              		.loc 1 126 48 view -0
+  31              		.cfi_startproc
+  32              		@ args = 0, pretend = 0, frame = 0
+  33              		@ frame_needed = 0, uses_anonymous_args = 0
+  34              		.loc 1 126 48 is_stmt 0 view .LVU1
+  35 0000 70B5     		push	{r4, r5, r6, lr}
+  36              	.LCFI0:
+  37              		.cfi_def_cfa_offset 16
+  38              		.cfi_offset 4, -16
+  39              		.cfi_offset 5, -12
+  40              		.cfi_offset 6, -8
+  41              		.cfi_offset 14, -4
+  42 0002 0446     		mov	r4, r0
+  43 0004 0E46     		mov	r6, r1
+ 127:BSP/motor.c   **** 	uint16_t _speed = fabs(speed);
+  44              		.loc 1 127 2 is_stmt 1 view .LVU2
+  45              		.loc 1 127 20 is_stmt 0 view .LVU3
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 4
+
+
+  46 0006 21F00040 		bic	r0, r1, #-2147483648
+  47              	.LVL1:
+  48              		.loc 1 127 11 view .LVU4
+  49 000a FFF7FEFF 		bl	__aeabi_f2uiz
+  50              	.LVL2:
+  51              		.loc 1 127 11 view .LVU5
+  52 000e 85B2     		uxth	r5, r0
+  53              	.LVL3:
+ 128:BSP/motor.c   **** 	if(_speed>PWM_MAX_VALUE) _speed = PWM_MAX_VALUE;
+  54              		.loc 1 128 2 is_stmt 1 view .LVU6
+  55              		.loc 1 128 4 is_stmt 0 view .LVU7
+  56 0010 B5F57A7F 		cmp	r5, #1000
+  57 0014 01D3     		bcc	.L2
+  58              		.loc 1 128 34 view .LVU8
+  59 0016 40F2E735 		movw	r5, #999
+  60              	.LVL4:
+  61              	.L2:
+ 129:BSP/motor.c   ****     switch (motor) {
+  62              		.loc 1 129 5 is_stmt 1 view .LVU9
+  63 001a 631E     		subs	r3, r4, #1
+  64 001c 032B     		cmp	r3, #3
+  65 001e 72D8     		bhi	.L1
+  66 0020 DFE803F0 		tbb	[pc, r3]
+  67              	.L5:
+  68 0024 02       		.byte	(.L8-.L5)/2
+  69 0025 25       		.byte	(.L7-.L5)/2
+  70 0026 48       		.byte	(.L6-.L5)/2
+  71 0027 5C       		.byte	(.L4-.L5)/2
+  72              		.p2align 1
+  73              	.L8:
+ 130:BSP/motor.c   ****         case 1:
+ 131:BSP/motor.c   ****             if (speed > 0) {
+  74              		.loc 1 131 13 view .LVU10
+  75              		.loc 1 131 16 is_stmt 0 view .LVU11
+  76 0028 0021     		movs	r1, #0
+  77 002a 3046     		mov	r0, r6
+  78 002c FFF7FEFF 		bl	__aeabi_fcmpgt
+  79              	.LVL5:
+  80 0030 70B1     		cbz	r0, .L22
+ 132:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR1_PORT, MOTOR1_PIN1, GPIO_PIN_SET);
+  81              		.loc 1 132 17 is_stmt 1 view .LVU12
+  82 0032 464C     		ldr	r4, .L27
+  83 0034 0122     		movs	r2, #1
+  84 0036 0821     		movs	r1, #8
+  85 0038 2046     		mov	r0, r4
+  86 003a FFF7FEFF 		bl	HAL_GPIO_WritePin
+  87              	.LVL6:
+ 133:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR1_PORT, MOTOR1_PIN2, GPIO_PIN_RESET);
+  88              		.loc 1 133 17 view .LVU13
+  89 003e 0022     		movs	r2, #0
+  90 0040 1021     		movs	r1, #16
+  91 0042 2046     		mov	r0, r4
+  92 0044 FFF7FEFF 		bl	HAL_GPIO_WritePin
+  93              	.LVL7:
+ 134:BSP/motor.c   ****             	__HAL_TIM_SET_COMPARE(&htim2, MOTOR1_CHANNEL, _speed);
+  94              		.loc 1 134 14 view .LVU14
+  95 0048 414B     		ldr	r3, .L27+4
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 5
+
+
+  96 004a 1B68     		ldr	r3, [r3]
+  97 004c 5D63     		str	r5, [r3, #52]
+  98 004e 5AE0     		b	.L1
+  99              	.L22:
+ 135:BSP/motor.c   ****             } else {
+ 136:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR1_PORT, MOTOR1_PIN1, GPIO_PIN_RESET);
+ 100              		.loc 1 136 17 view .LVU15
+ 101 0050 3E4C     		ldr	r4, .L27
+ 102 0052 0022     		movs	r2, #0
+ 103 0054 0821     		movs	r1, #8
+ 104 0056 2046     		mov	r0, r4
+ 105 0058 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 106              	.LVL8:
+ 137:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR1_PORT, MOTOR1_PIN2, GPIO_PIN_SET);
+ 107              		.loc 1 137 17 view .LVU16
+ 108 005c 0122     		movs	r2, #1
+ 109 005e 1021     		movs	r1, #16
+ 110 0060 2046     		mov	r0, r4
+ 111 0062 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 112              	.LVL9:
+ 138:BSP/motor.c   ****             	__HAL_TIM_SET_COMPARE(&htim2, MOTOR1_CHANNEL, _speed);
+ 113              		.loc 1 138 14 view .LVU17
+ 114 0066 3A4B     		ldr	r3, .L27+4
+ 115 0068 1B68     		ldr	r3, [r3]
+ 116 006a 5D63     		str	r5, [r3, #52]
+ 117 006c 4BE0     		b	.L1
+ 118              	.L7:
+ 139:BSP/motor.c   ****             }
+ 140:BSP/motor.c   ****             break;
+ 141:BSP/motor.c   **** 		case 2:
+ 142:BSP/motor.c   **** 		    if (speed > 0) {
+ 119              		.loc 1 142 7 view .LVU18
+ 120              		.loc 1 142 10 is_stmt 0 view .LVU19
+ 121 006e 0021     		movs	r1, #0
+ 122 0070 3046     		mov	r0, r6
+ 123 0072 FFF7FEFF 		bl	__aeabi_fcmpgt
+ 124              	.LVL10:
+ 125 0076 70B1     		cbz	r0, .L23
+ 143:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR2_PORT, MOTOR2_PIN1, GPIO_PIN_SET);
+ 126              		.loc 1 143 5 is_stmt 1 view .LVU20
+ 127 0078 344C     		ldr	r4, .L27
+ 128 007a 0122     		movs	r2, #1
+ 129 007c 2021     		movs	r1, #32
+ 130 007e 2046     		mov	r0, r4
+ 131 0080 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 132              	.LVL11:
+ 144:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR2_PORT, MOTOR2_PIN2, GPIO_PIN_RESET);
+ 133              		.loc 1 144 5 view .LVU21
+ 134 0084 0022     		movs	r2, #0
+ 135 0086 4021     		movs	r1, #64
+ 136 0088 2046     		mov	r0, r4
+ 137 008a FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 138              	.LVL12:
+ 145:BSP/motor.c   **** 				__HAL_TIM_SET_COMPARE(&htim2, MOTOR2_CHANNEL, _speed);
+ 139              		.loc 1 145 5 view .LVU22
+ 140 008e 304B     		ldr	r3, .L27+4
+ 141 0090 1B68     		ldr	r3, [r3]
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 6
+
+
+ 142 0092 9D63     		str	r5, [r3, #56]
+ 143 0094 37E0     		b	.L1
+ 144              	.L23:
+ 146:BSP/motor.c   **** 				} else {
+ 147:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR2_PORT, MOTOR2_PIN1, GPIO_PIN_RESET);
+ 145              		.loc 1 147 17 view .LVU23
+ 146 0096 2D4C     		ldr	r4, .L27
+ 147 0098 0022     		movs	r2, #0
+ 148 009a 2021     		movs	r1, #32
+ 149 009c 2046     		mov	r0, r4
+ 150 009e FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 151              	.LVL13:
+ 148:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR2_PORT, MOTOR2_PIN2, GPIO_PIN_SET);
+ 152              		.loc 1 148 17 view .LVU24
+ 153 00a2 0122     		movs	r2, #1
+ 154 00a4 4021     		movs	r1, #64
+ 155 00a6 2046     		mov	r0, r4
+ 156 00a8 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 157              	.LVL14:
+ 149:BSP/motor.c   ****                 __HAL_TIM_SET_COMPARE(&htim2, MOTOR2_CHANNEL, _speed);
+ 158              		.loc 1 149 17 view .LVU25
+ 159 00ac 284B     		ldr	r3, .L27+4
+ 160 00ae 1B68     		ldr	r3, [r3]
+ 161 00b0 9D63     		str	r5, [r3, #56]
+ 162 00b2 28E0     		b	.L1
+ 163              	.L6:
+ 150:BSP/motor.c   **** 				}
+ 151:BSP/motor.c   **** 				break;
+ 152:BSP/motor.c   **** 		case 3:
+ 153:BSP/motor.c   **** 			if (speed > 0) {
+ 164              		.loc 1 153 4 view .LVU26
+ 165              		.loc 1 153 7 is_stmt 0 view .LVU27
+ 166 00b4 0021     		movs	r1, #0
+ 167 00b6 3046     		mov	r0, r6
+ 168 00b8 FFF7FEFF 		bl	__aeabi_fcmpgt
+ 169              	.LVL15:
+ 170 00bc 20B3     		cbz	r0, .L24
+ 154:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR3_PORT, MOTOR3_PIN1, GPIO_PIN_SET);
+ 171              		.loc 1 154 5 is_stmt 1 view .LVU28
+ 172 00be 234C     		ldr	r4, .L27
+ 173 00c0 0122     		movs	r2, #1
+ 174 00c2 8021     		movs	r1, #128
+ 175 00c4 2046     		mov	r0, r4
+ 176 00c6 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 177              	.LVL16:
+ 155:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR3_PORT, MOTOR3_PIN2, GPIO_PIN_RESET);
+ 178              		.loc 1 155 5 view .LVU29
+ 179 00ca 0022     		movs	r2, #0
+ 180 00cc 4FF48071 		mov	r1, #256
+ 181 00d0 2046     		mov	r0, r4
+ 182 00d2 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 183              	.LVL17:
+ 156:BSP/motor.c   **** 				__HAL_TIM_SET_COMPARE(&htim2, MOTOR3_CHANNEL, _speed);
+ 184              		.loc 1 156 5 view .LVU30
+ 185 00d6 1E4B     		ldr	r3, .L27+4
+ 186 00d8 1B68     		ldr	r3, [r3]
+ 187 00da DD63     		str	r5, [r3, #60]
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 7
+
+
+ 188              	.L4:
+ 157:BSP/motor.c   **** 				} else {
+ 158:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR3_PORT, MOTOR3_PIN1, GPIO_PIN_RESET);
+ 159:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR3_PORT, MOTOR3_PIN2, GPIO_PIN_SET);
+ 160:BSP/motor.c   **** 				__HAL_TIM_SET_COMPARE(&htim2, MOTOR3_CHANNEL, _speed);
+ 161:BSP/motor.c   **** 				}
+ 162:BSP/motor.c   **** 		case 4:
+ 163:BSP/motor.c   **** 			if (speed > 0) {
+ 189              		.loc 1 163 4 view .LVU31
+ 190              		.loc 1 163 7 is_stmt 0 view .LVU32
+ 191 00dc 0021     		movs	r1, #0
+ 192 00de 3046     		mov	r0, r6
+ 193 00e0 FFF7FEFF 		bl	__aeabi_fcmpgt
+ 194              	.LVL18:
+ 195 00e4 00B3     		cbz	r0, .L25
+ 164:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR4_PORT, MOTOR4_PIN1, GPIO_PIN_SET);
+ 196              		.loc 1 164 5 is_stmt 1 view .LVU33
+ 197 00e6 1B4C     		ldr	r4, .L27+8
+ 198 00e8 0122     		movs	r2, #1
+ 199 00ea 4FF40051 		mov	r1, #8192
+ 200 00ee 2046     		mov	r0, r4
+ 201 00f0 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 202              	.LVL19:
+ 165:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR4_PORT, MOTOR4_PIN2, GPIO_PIN_RESET);
+ 203              		.loc 1 165 5 view .LVU34
+ 204 00f4 0022     		movs	r2, #0
+ 205 00f6 4FF48041 		mov	r1, #16384
+ 206 00fa 2046     		mov	r0, r4
+ 207 00fc FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 208              	.LVL20:
+ 166:BSP/motor.c   **** 				__HAL_TIM_SET_COMPARE(&htim2, MOTOR4_CHANNEL, _speed);
+ 209              		.loc 1 166 5 view .LVU35
+ 210 0100 134B     		ldr	r3, .L27+4
+ 211 0102 1B68     		ldr	r3, [r3]
+ 212 0104 1D64     		str	r5, [r3, #64]
+ 213              	.L1:
+ 167:BSP/motor.c   **** 				} else {
+ 168:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR4_PORT, MOTOR4_PIN1, GPIO_PIN_RESET);
+ 169:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR4_PORT, MOTOR4_PIN2, GPIO_PIN_SET);
+ 170:BSP/motor.c   ****                 __HAL_TIM_SET_COMPARE(&htim2, MOTOR4_CHANNEL, _speed);
+ 171:BSP/motor.c   **** 				}
+ 172:BSP/motor.c   ****     }
+ 173:BSP/motor.c   **** }
+ 214              		.loc 1 173 1 is_stmt 0 view .LVU36
+ 215 0106 70BD     		pop	{r4, r5, r6, pc}
+ 216              	.LVL21:
+ 217              	.L24:
+ 158:BSP/motor.c   **** 				HAL_GPIO_WritePin(MOTOR3_PORT, MOTOR3_PIN2, GPIO_PIN_SET);
+ 218              		.loc 1 158 5 is_stmt 1 view .LVU37
+ 219 0108 104C     		ldr	r4, .L27
+ 220 010a 0022     		movs	r2, #0
+ 221 010c 8021     		movs	r1, #128
+ 222 010e 2046     		mov	r0, r4
+ 223 0110 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 224              	.LVL22:
+ 159:BSP/motor.c   **** 				__HAL_TIM_SET_COMPARE(&htim2, MOTOR3_CHANNEL, _speed);
+ 225              		.loc 1 159 5 view .LVU38
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 8
+
+
+ 226 0114 0122     		movs	r2, #1
+ 227 0116 4FF48071 		mov	r1, #256
+ 228 011a 2046     		mov	r0, r4
+ 229 011c FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 230              	.LVL23:
+ 160:BSP/motor.c   **** 				}
+ 231              		.loc 1 160 5 view .LVU39
+ 232 0120 0B4B     		ldr	r3, .L27+4
+ 233 0122 1B68     		ldr	r3, [r3]
+ 234 0124 DD63     		str	r5, [r3, #60]
+ 235 0126 D9E7     		b	.L4
+ 236              	.L25:
+ 168:BSP/motor.c   ****                 HAL_GPIO_WritePin(MOTOR4_PORT, MOTOR4_PIN2, GPIO_PIN_SET);
+ 237              		.loc 1 168 17 view .LVU40
+ 238 0128 0A4C     		ldr	r4, .L27+8
+ 239 012a 0022     		movs	r2, #0
+ 240 012c 4FF40051 		mov	r1, #8192
+ 241 0130 2046     		mov	r0, r4
+ 242 0132 FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 243              	.LVL24:
+ 169:BSP/motor.c   ****                 __HAL_TIM_SET_COMPARE(&htim2, MOTOR4_CHANNEL, _speed);
+ 244              		.loc 1 169 17 view .LVU41
+ 245 0136 0122     		movs	r2, #1
+ 246 0138 4FF48041 		mov	r1, #16384
+ 247 013c 2046     		mov	r0, r4
+ 248 013e FFF7FEFF 		bl	HAL_GPIO_WritePin
+ 249              	.LVL25:
+ 170:BSP/motor.c   **** 				}
+ 250              		.loc 1 170 17 view .LVU42
+ 251 0142 034B     		ldr	r3, .L27+4
+ 252 0144 1B68     		ldr	r3, [r3]
+ 253 0146 1D64     		str	r5, [r3, #64]
+ 254              		.loc 1 173 1 is_stmt 0 view .LVU43
+ 255 0148 DDE7     		b	.L1
+ 256              	.L28:
+ 257 014a 00BF     		.align	2
+ 258              	.L27:
+ 259 014c 000C0140 		.word	1073810432
+ 260 0150 00000000 		.word	htim2
+ 261 0154 00100140 		.word	1073811456
+ 262              		.cfi_endproc
+ 263              	.LFE74:
+ 265              		.section	.text.Motor_Config,"ax",%progbits
+ 266              		.align	1
+ 267              		.global	Motor_Config
+ 268              		.syntax unified
+ 269              		.thumb
+ 270              		.thumb_func
+ 272              	Motor_Config:
+ 273              	.LFB73:
+ 115:BSP/motor.c   **** 	Motor_SetSpeed(1,0);
+ 274              		.loc 1 115 1 is_stmt 1 view -0
+ 275              		.cfi_startproc
+ 276              		@ args = 0, pretend = 0, frame = 0
+ 277              		@ frame_needed = 0, uses_anonymous_args = 0
+ 278 0000 10B5     		push	{r4, lr}
+ 279              	.LCFI1:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 9
+
+
+ 280              		.cfi_def_cfa_offset 8
+ 281              		.cfi_offset 4, -8
+ 282              		.cfi_offset 14, -4
+ 116:BSP/motor.c   **** 	Motor_SetSpeed(2,0);
+ 283              		.loc 1 116 2 view .LVU45
+ 284 0002 0024     		movs	r4, #0
+ 285 0004 2146     		mov	r1, r4
+ 286 0006 0120     		movs	r0, #1
+ 287 0008 FFF7FEFF 		bl	Motor_SetSpeed
+ 288              	.LVL26:
+ 117:BSP/motor.c   **** 	Motor_SetSpeed(3,0);
+ 289              		.loc 1 117 2 view .LVU46
+ 290 000c 2146     		mov	r1, r4
+ 291 000e 0220     		movs	r0, #2
+ 292 0010 FFF7FEFF 		bl	Motor_SetSpeed
+ 293              	.LVL27:
+ 118:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+ 294              		.loc 1 118 2 view .LVU47
+ 295 0014 2146     		mov	r1, r4
+ 296 0016 0320     		movs	r0, #3
+ 297 0018 FFF7FEFF 		bl	Motor_SetSpeed
+ 298              	.LVL28:
+ 119:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+ 299              		.loc 1 119 5 view .LVU48
+ 300 001c 064C     		ldr	r4, .L31
+ 301 001e 0021     		movs	r1, #0
+ 302 0020 2046     		mov	r0, r4
+ 303 0022 FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 304              	.LVL29:
+ 120:BSP/motor.c   ****     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+ 305              		.loc 1 120 5 view .LVU49
+ 306 0026 0421     		movs	r1, #4
+ 307 0028 2046     		mov	r0, r4
+ 308 002a FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 309              	.LVL30:
+ 121:BSP/motor.c   **** }
+ 310              		.loc 1 121 5 view .LVU50
+ 311 002e 0821     		movs	r1, #8
+ 312 0030 2046     		mov	r0, r4
+ 313 0032 FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 314              	.LVL31:
+ 122:BSP/motor.c   **** 
+ 315              		.loc 1 122 1 is_stmt 0 view .LVU51
+ 316 0036 10BD     		pop	{r4, pc}
+ 317              	.L32:
+ 318              		.align	2
+ 319              	.L31:
+ 320 0038 00000000 		.word	htim2
+ 321              		.cfi_endproc
+ 322              	.LFE73:
+ 324              		.section	.text.Motor_stop,"ax",%progbits
+ 325              		.align	1
+ 326              		.global	Motor_stop
+ 327              		.syntax unified
+ 328              		.thumb
+ 329              		.thumb_func
+ 331              	Motor_stop:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 10
+
+
+ 332              	.LVL32:
+ 333              	.LFB75:
+ 174:BSP/motor.c   **** 
+ 175:BSP/motor.c   **** void Motor_stop(uint8_t motor)
+ 176:BSP/motor.c   **** {
+ 334              		.loc 1 176 1 is_stmt 1 view -0
+ 335              		.cfi_startproc
+ 336              		@ args = 0, pretend = 0, frame = 0
+ 337              		@ frame_needed = 0, uses_anonymous_args = 0
+ 338              		.loc 1 176 1 is_stmt 0 view .LVU53
+ 339 0000 08B5     		push	{r3, lr}
+ 340              	.LCFI2:
+ 341              		.cfi_def_cfa_offset 8
+ 342              		.cfi_offset 3, -8
+ 343              		.cfi_offset 14, -4
+ 177:BSP/motor.c   ****     switch (motor) {
+ 344              		.loc 1 177 5 is_stmt 1 view .LVU54
+ 345 0002 0138     		subs	r0, r0, #1
+ 346              	.LVL33:
+ 347              		.loc 1 177 5 is_stmt 0 view .LVU55
+ 348 0004 0328     		cmp	r0, #3
+ 349 0006 07D8     		bhi	.L33
+ 350 0008 DFE800F0 		tbb	[pc, r0]
+ 351              	.L36:
+ 352 000c 02       		.byte	(.L39-.L36)/2
+ 353 000d 07       		.byte	(.L38-.L36)/2
+ 354 000e 0C       		.byte	(.L37-.L36)/2
+ 355 000f 11       		.byte	(.L35-.L36)/2
+ 356              		.p2align 1
+ 357              	.L39:
+ 178:BSP/motor.c   ****         case 1:
+ 179:BSP/motor.c   ****             HAL_TIM_PWM_Stop(&htim2,TIM_CHANNEL_1);
+ 358              		.loc 1 179 13 is_stmt 1 view .LVU56
+ 359 0010 0021     		movs	r1, #0
+ 360 0012 0948     		ldr	r0, .L41
+ 361 0014 FFF7FEFF 		bl	HAL_TIM_PWM_Stop
+ 362              	.LVL34:
+ 180:BSP/motor.c   ****             break;
+ 363              		.loc 1 180 13 view .LVU57
+ 364              	.L33:
+ 181:BSP/motor.c   **** 		case 2:
+ 182:BSP/motor.c   **** 			HAL_TIM_PWM_Stop(&htim2,TIM_CHANNEL_2);
+ 183:BSP/motor.c   ****             break;
+ 184:BSP/motor.c   ****         case 3:
+ 185:BSP/motor.c   ****             HAL_TIM_PWM_Stop(&htim2,TIM_CHANNEL_3);
+ 186:BSP/motor.c   ****             break;
+ 187:BSP/motor.c   **** 		case 4:
+ 188:BSP/motor.c   **** 			HAL_TIM_PWM_Stop(&htim2,TIM_CHANNEL_4);
+ 189:BSP/motor.c   ****             break;
+ 190:BSP/motor.c   ****     }
+ 191:BSP/motor.c   **** }
+ 365              		.loc 1 191 1 is_stmt 0 view .LVU58
+ 366 0018 08BD     		pop	{r3, pc}
+ 367              	.L38:
+ 182:BSP/motor.c   ****             break;
+ 368              		.loc 1 182 4 is_stmt 1 view .LVU59
+ 369 001a 0421     		movs	r1, #4
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 11
+
+
+ 370 001c 0648     		ldr	r0, .L41
+ 371 001e FFF7FEFF 		bl	HAL_TIM_PWM_Stop
+ 372              	.LVL35:
+ 183:BSP/motor.c   ****         case 3:
+ 373              		.loc 1 183 13 view .LVU60
+ 374 0022 F9E7     		b	.L33
+ 375              	.L37:
+ 185:BSP/motor.c   ****             break;
+ 376              		.loc 1 185 13 view .LVU61
+ 377 0024 0821     		movs	r1, #8
+ 378 0026 0448     		ldr	r0, .L41
+ 379 0028 FFF7FEFF 		bl	HAL_TIM_PWM_Stop
+ 380              	.LVL36:
+ 186:BSP/motor.c   **** 		case 4:
+ 381              		.loc 1 186 13 view .LVU62
+ 382 002c F4E7     		b	.L33
+ 383              	.L35:
+ 188:BSP/motor.c   ****             break;
+ 384              		.loc 1 188 4 view .LVU63
+ 385 002e 0C21     		movs	r1, #12
+ 386 0030 0148     		ldr	r0, .L41
+ 387 0032 FFF7FEFF 		bl	HAL_TIM_PWM_Stop
+ 388              	.LVL37:
+ 189:BSP/motor.c   ****     }
+ 389              		.loc 1 189 13 view .LVU64
+ 390              		.loc 1 191 1 is_stmt 0 view .LVU65
+ 391 0036 EFE7     		b	.L33
+ 392              	.L42:
+ 393              		.align	2
+ 394              	.L41:
+ 395 0038 00000000 		.word	htim2
+ 396              		.cfi_endproc
+ 397              	.LFE75:
+ 399              		.section	.text.Motor_start,"ax",%progbits
+ 400              		.align	1
+ 401              		.global	Motor_start
+ 402              		.syntax unified
+ 403              		.thumb
+ 404              		.thumb_func
+ 406              	Motor_start:
+ 407              	.LVL38:
+ 408              	.LFB76:
+ 192:BSP/motor.c   **** 
+ 193:BSP/motor.c   **** void Motor_start(uint8_t motor)
+ 194:BSP/motor.c   **** {
+ 409              		.loc 1 194 1 is_stmt 1 view -0
+ 410              		.cfi_startproc
+ 411              		@ args = 0, pretend = 0, frame = 0
+ 412              		@ frame_needed = 0, uses_anonymous_args = 0
+ 413              		.loc 1 194 1 is_stmt 0 view .LVU67
+ 414 0000 08B5     		push	{r3, lr}
+ 415              	.LCFI3:
+ 416              		.cfi_def_cfa_offset 8
+ 417              		.cfi_offset 3, -8
+ 418              		.cfi_offset 14, -4
+ 195:BSP/motor.c   ****     switch (motor) {
+ 419              		.loc 1 195 5 is_stmt 1 view .LVU68
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 12
+
+
+ 420 0002 0138     		subs	r0, r0, #1
+ 421              	.LVL39:
+ 422              		.loc 1 195 5 is_stmt 0 view .LVU69
+ 423 0004 0328     		cmp	r0, #3
+ 424 0006 07D8     		bhi	.L43
+ 425 0008 DFE800F0 		tbb	[pc, r0]
+ 426              	.L46:
+ 427 000c 02       		.byte	(.L49-.L46)/2
+ 428 000d 07       		.byte	(.L48-.L46)/2
+ 429 000e 0C       		.byte	(.L47-.L46)/2
+ 430 000f 11       		.byte	(.L45-.L46)/2
+ 431              		.p2align 1
+ 432              	.L49:
+ 196:BSP/motor.c   ****         case 1:
+ 197:BSP/motor.c   ****             HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_1);
+ 433              		.loc 1 197 13 is_stmt 1 view .LVU70
+ 434 0010 0021     		movs	r1, #0
+ 435 0012 0948     		ldr	r0, .L51
+ 436 0014 FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 437              	.LVL40:
+ 198:BSP/motor.c   ****             break;
+ 438              		.loc 1 198 13 view .LVU71
+ 439              	.L43:
+ 199:BSP/motor.c   **** 		case 2:
+ 200:BSP/motor.c   **** 			HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_2);
+ 201:BSP/motor.c   ****             break;
+ 202:BSP/motor.c   ****         case 3:
+ 203:BSP/motor.c   ****             HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_3);
+ 204:BSP/motor.c   ****             break;
+ 205:BSP/motor.c   **** 		case 4:
+ 206:BSP/motor.c   **** 			HAL_TIM_PWM_Start(&htim2,TIM_CHANNEL_4);
+ 207:BSP/motor.c   ****             break;
+ 208:BSP/motor.c   ****     }
+ 209:BSP/motor.c   **** }
+ 440              		.loc 1 209 1 is_stmt 0 view .LVU72
+ 441 0018 08BD     		pop	{r3, pc}
+ 442              	.L48:
+ 200:BSP/motor.c   ****             break;
+ 443              		.loc 1 200 4 is_stmt 1 view .LVU73
+ 444 001a 0421     		movs	r1, #4
+ 445 001c 0648     		ldr	r0, .L51
+ 446 001e FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 447              	.LVL41:
+ 201:BSP/motor.c   ****         case 3:
+ 448              		.loc 1 201 13 view .LVU74
+ 449 0022 F9E7     		b	.L43
+ 450              	.L47:
+ 203:BSP/motor.c   ****             break;
+ 451              		.loc 1 203 13 view .LVU75
+ 452 0024 0821     		movs	r1, #8
+ 453 0026 0448     		ldr	r0, .L51
+ 454 0028 FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 455              	.LVL42:
+ 204:BSP/motor.c   **** 		case 4:
+ 456              		.loc 1 204 13 view .LVU76
+ 457 002c F4E7     		b	.L43
+ 458              	.L45:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 13
+
+
+ 206:BSP/motor.c   ****             break;
+ 459              		.loc 1 206 4 view .LVU77
+ 460 002e 0C21     		movs	r1, #12
+ 461 0030 0148     		ldr	r0, .L51
+ 462 0032 FFF7FEFF 		bl	HAL_TIM_PWM_Start
+ 463              	.LVL43:
+ 207:BSP/motor.c   ****     }
+ 464              		.loc 1 207 13 view .LVU78
+ 465              		.loc 1 209 1 is_stmt 0 view .LVU79
+ 466 0036 EFE7     		b	.L43
+ 467              	.L52:
+ 468              		.align	2
+ 469              	.L51:
+ 470 0038 00000000 		.word	htim2
+ 471              		.cfi_endproc
+ 472              	.LFE76:
+ 474              		.section	.text.KeyTimerFunc,"ax",%progbits
+ 475              		.align	1
+ 476              		.global	KeyTimerFunc
+ 477              		.syntax unified
+ 478              		.thumb
+ 479              		.thumb_func
+ 481              	KeyTimerFunc:
+ 482              	.LVL44:
+ 483              	.LFB80:
+ 210:BSP/motor.c   **** 
+ 211:BSP/motor.c   **** void vONEShotTimerFunc1( TimerHandle_t xTimer ) //第一级传送带
+ 212:BSP/motor.c   **** {
+ 213:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[0],0);
+ 214:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 215:BSP/motor.c   **** 	{
+ 216:BSP/motor.c   **** 		Motor_start(1);
+ 217:BSP/motor.c   **** 		PID_setMotorPoint(&motor1,fabs(motor1.TPID.setpoint));
+ 218:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[0],NULL);
+ 219:BSP/motor.c   **** 	}
+ 220:BSP/motor.c   **** 	else
+ 221:BSP/motor.c   **** 	{
+ 222:BSP/motor.c   **** 		UartPrintf("Get semaphore failed1");
+ 223:BSP/motor.c   **** 	}
+ 224:BSP/motor.c   **** }
+ 225:BSP/motor.c   **** void vONEShotTimerFunc2( TimerHandle_t xTimer ) //第二级传送带
+ 226:BSP/motor.c   **** {
+ 227:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[1],0);
+ 228:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 229:BSP/motor.c   **** 	{
+ 230:BSP/motor.c   **** 		Motor_start(2);
+ 231:BSP/motor.c   **** 		PID_setMotorPoint(&motor2,fabs(motor2.TPID.setpoint));
+ 232:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[1],NULL);
+ 233:BSP/motor.c   **** 	}
+ 234:BSP/motor.c   **** 	else{
+ 235:BSP/motor.c   **** 		UartPrintf("Get semaphore failed2");
+ 236:BSP/motor.c   **** 	}
+ 237:BSP/motor.c   **** }
+ 238:BSP/motor.c   **** void vONEShotTimerFunc3( TimerHandle_t xTimer ) //第三级传送带
+ 239:BSP/motor.c   **** {
+ 240:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[2],0);
+ 241:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 14
+
+
+ 242:BSP/motor.c   **** 	{
+ 243:BSP/motor.c   **** 		Motor_start(3);
+ 244:BSP/motor.c   **** 		PID_setMotorPoint(&motor3,fabs(motor3.TPID.setpoint));
+ 245:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[2],NULL);
+ 246:BSP/motor.c   **** 	}
+ 247:BSP/motor.c   **** 	else{
+ 248:BSP/motor.c   **** 		UartPrintf("Get semaphore failed3");
+ 249:BSP/motor.c   **** 	}
+ 250:BSP/motor.c   **** }
+ 251:BSP/motor.c   **** void KeyTimerFunc( TimerHandle_t xTimer )
+ 252:BSP/motor.c   **** {
+ 484              		.loc 1 252 1 is_stmt 1 view -0
+ 485              		.cfi_startproc
+ 486              		@ args = 0, pretend = 0, frame = 0
+ 487              		@ frame_needed = 0, uses_anonymous_args = 0
+ 488              		.loc 1 252 1 is_stmt 0 view .LVU81
+ 489 0000 38B5     		push	{r3, r4, r5, lr}
+ 490              	.LCFI4:
+ 491              		.cfi_def_cfa_offset 16
+ 492              		.cfi_offset 3, -16
+ 493              		.cfi_offset 4, -12
+ 494              		.cfi_offset 5, -8
+ 495              		.cfi_offset 14, -4
+ 253:BSP/motor.c   **** 		key[0].state=HAL_GPIO_ReadPin(LIGHTA4_GPIO_Port,LIGHTA4_Pin);
+ 496              		.loc 1 253 3 is_stmt 1 view .LVU82
+ 497              		.loc 1 253 16 is_stmt 0 view .LVU83
+ 498 0002 284D     		ldr	r5, .L62
+ 499 0004 1021     		movs	r1, #16
+ 500 0006 2846     		mov	r0, r5
+ 501              	.LVL45:
+ 502              		.loc 1 253 16 view .LVU84
+ 503 0008 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 504              	.LVL46:
+ 505              		.loc 1 253 15 view .LVU85
+ 506 000c 264C     		ldr	r4, .L62+4
+ 507 000e A070     		strb	r0, [r4, #2]
+ 254:BSP/motor.c   **** 		key[1].state=HAL_GPIO_ReadPin(LIGHTA5_GPIO_Port,LIGHTA5_Pin);
+ 508              		.loc 1 254 3 is_stmt 1 view .LVU86
+ 509              		.loc 1 254 16 is_stmt 0 view .LVU87
+ 510 0010 2021     		movs	r1, #32
+ 511 0012 2846     		mov	r0, r5
+ 512 0014 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 513              	.LVL47:
+ 514              		.loc 1 254 15 view .LVU88
+ 515 0018 6071     		strb	r0, [r4, #5]
+ 255:BSP/motor.c   **** 		key[2].state=HAL_GPIO_ReadPin(LIGHT_GPIO_Port,LIGHT_Pin);
+ 516              		.loc 1 255 3 is_stmt 1 view .LVU89
+ 517              		.loc 1 255 16 is_stmt 0 view .LVU90
+ 518 001a 4FF40041 		mov	r1, #32768
+ 519 001e 2348     		ldr	r0, .L62+8
+ 520 0020 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 521              	.LVL48:
+ 522              		.loc 1 255 15 view .LVU91
+ 523 0024 2072     		strb	r0, [r4, #8]
+ 256:BSP/motor.c   **** 		for(uint8_t i=0;i<NUM_Lights;i++)
+ 524              		.loc 1 256 3 is_stmt 1 view .LVU92
+ 525              	.LBB2:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 15
+
+
+ 526              		.loc 1 256 7 view .LVU93
+ 527              	.LVL49:
+ 528              		.loc 1 256 15 is_stmt 0 view .LVU94
+ 529 0026 0023     		movs	r3, #0
+ 530              		.loc 1 256 3 view .LVU95
+ 531 0028 0DE0     		b	.L54
+ 532              	.LVL50:
+ 533              	.L55:
+ 257:BSP/motor.c   **** 		{
+ 258:BSP/motor.c   **** 			switch (key[i].step)
+ 259:BSP/motor.c   **** 			{
+ 260:BSP/motor.c   **** 				case 0:
+ 261:BSP/motor.c   **** 					if(key[i].state)//按键按下
+ 262:BSP/motor.c   **** 					{
+ 263:BSP/motor.c   **** 						key[i].step=1;
+ 264:BSP/motor.c   **** 					}
+ 265:BSP/motor.c   **** 					break;
+ 266:BSP/motor.c   **** 				case 1:
+ 267:BSP/motor.c   **** 					if(key[i].state)//按键还是按下状态
+ 534              		.loc 1 267 6 is_stmt 1 view .LVU96
+ 535              		.loc 1 267 15 is_stmt 0 view .LVU97
+ 536 002a 03EB4300 		add	r0, r3, r3, lsl #1
+ 537 002e 1E49     		ldr	r1, .L62+4
+ 538 0030 0144     		add	r1, r1, r0
+ 539 0032 8978     		ldrb	r1, [r1, #2]	@ zero_extendqisi2
+ 540              		.loc 1 267 8 view .LVU98
+ 541 0034 F9B1     		cbz	r1, .L58
+ 268:BSP/motor.c   **** 					{
+ 269:BSP/motor.c   **** 						key[i].step=2;
+ 542              		.loc 1 269 7 is_stmt 1 view .LVU99
+ 543              		.loc 1 269 18 is_stmt 0 view .LVU100
+ 544 0036 03EB4302 		add	r2, r3, r3, lsl #1
+ 545 003a 1B49     		ldr	r1, .L62+4
+ 546 003c 0A44     		add	r2, r2, r1
+ 547 003e 0221     		movs	r1, #2
+ 548 0040 5170     		strb	r1, [r2, #1]
+ 549              	.L57:
+ 256:BSP/motor.c   **** 		{
+ 550              		.loc 1 256 32 is_stmt 1 discriminator 2 view .LVU101
+ 256:BSP/motor.c   **** 		{
+ 551              		.loc 1 256 33 is_stmt 0 discriminator 2 view .LVU102
+ 552 0042 0133     		adds	r3, r3, #1
+ 553              	.LVL51:
+ 256:BSP/motor.c   **** 		{
+ 554              		.loc 1 256 33 discriminator 2 view .LVU103
+ 555 0044 DBB2     		uxtb	r3, r3
+ 556              	.LVL52:
+ 557              	.L54:
+ 256:BSP/motor.c   **** 		{
+ 558              		.loc 1 256 19 is_stmt 1 discriminator 1 view .LVU104
+ 256:BSP/motor.c   **** 		{
+ 559              		.loc 1 256 3 is_stmt 0 discriminator 1 view .LVU105
+ 560 0046 022B     		cmp	r3, #2
+ 561 0048 2BD8     		bhi	.L61
+ 258:BSP/motor.c   **** 			{
+ 562              		.loc 1 258 4 is_stmt 1 view .LVU106
+ 258:BSP/motor.c   **** 			{
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 16
+
+
+ 563              		.loc 1 258 18 is_stmt 0 view .LVU107
+ 564 004a 03EB4300 		add	r0, r3, r3, lsl #1
+ 565 004e 1649     		ldr	r1, .L62+4
+ 566 0050 0144     		add	r1, r1, r0
+ 567 0052 4978     		ldrb	r1, [r1, #1]	@ zero_extendqisi2
+ 258:BSP/motor.c   **** 			{
+ 568              		.loc 1 258 4 view .LVU108
+ 569 0054 0129     		cmp	r1, #1
+ 570 0056 E8D0     		beq	.L55
+ 571 0058 0229     		cmp	r1, #2
+ 572 005a 13D0     		beq	.L56
+ 573 005c 0029     		cmp	r1, #0
+ 574 005e F0D1     		bne	.L57
+ 261:BSP/motor.c   **** 					{
+ 575              		.loc 1 261 6 is_stmt 1 view .LVU109
+ 261:BSP/motor.c   **** 					{
+ 576              		.loc 1 261 15 is_stmt 0 view .LVU110
+ 577 0060 1149     		ldr	r1, .L62+4
+ 578 0062 0144     		add	r1, r1, r0
+ 579 0064 8978     		ldrb	r1, [r1, #2]	@ zero_extendqisi2
+ 261:BSP/motor.c   **** 					{
+ 580              		.loc 1 261 8 view .LVU111
+ 581 0066 0029     		cmp	r1, #0
+ 582 0068 EBD0     		beq	.L57
+ 263:BSP/motor.c   **** 					}
+ 583              		.loc 1 263 7 is_stmt 1 view .LVU112
+ 263:BSP/motor.c   **** 					}
+ 584              		.loc 1 263 18 is_stmt 0 view .LVU113
+ 585 006a 0246     		mov	r2, r0
+ 586 006c 0E49     		ldr	r1, .L62+4
+ 587 006e 0A44     		add	r2, r2, r1
+ 588 0070 0121     		movs	r1, #1
+ 589 0072 5170     		strb	r1, [r2, #1]
+ 590 0074 E5E7     		b	.L57
+ 591              	.L58:
+ 270:BSP/motor.c   **** 					}else//按键已经松开
+ 271:BSP/motor.c   **** 					{
+ 272:BSP/motor.c   **** 						key[i].step=0;
+ 592              		.loc 1 272 7 is_stmt 1 view .LVU114
+ 593              		.loc 1 272 18 is_stmt 0 view .LVU115
+ 594 0076 03EB4302 		add	r2, r3, r3, lsl #1
+ 595 007a 0B49     		ldr	r1, .L62+4
+ 596 007c 0A44     		add	r2, r2, r1
+ 597 007e 0021     		movs	r1, #0
+ 598 0080 5170     		strb	r1, [r2, #1]
+ 599 0082 DEE7     		b	.L57
+ 600              	.L56:
+ 273:BSP/motor.c   **** 					}
+ 274:BSP/motor.c   **** 					break;
+ 275:BSP/motor.c   **** 				case 2:
+ 276:BSP/motor.c   **** 					if(!key[i].state)//按键松开
+ 601              		.loc 1 276 6 is_stmt 1 view .LVU116
+ 602              		.loc 1 276 16 is_stmt 0 view .LVU117
+ 603 0084 03EB4300 		add	r0, r3, r3, lsl #1
+ 604 0088 0749     		ldr	r1, .L62+4
+ 605 008a 0144     		add	r1, r1, r0
+ 606 008c 8978     		ldrb	r1, [r1, #2]	@ zero_extendqisi2
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 17
+
+
+ 607              		.loc 1 276 8 view .LVU118
+ 608 008e 0029     		cmp	r1, #0
+ 609 0090 D7D1     		bne	.L57
+ 277:BSP/motor.c   **** 					{
+ 278:BSP/motor.c   **** 						key[i].flag = 1;
+ 610              		.loc 1 278 7 is_stmt 1 view .LVU119
+ 611              		.loc 1 278 19 is_stmt 0 view .LVU120
+ 612 0092 0549     		ldr	r1, .L62+4
+ 613 0094 0246     		mov	r2, r0
+ 614 0096 0818     		adds	r0, r1, r0
+ 615 0098 0124     		movs	r4, #1
+ 616 009a 8C54     		strb	r4, [r1, r2]
+ 279:BSP/motor.c   **** 						key[i].step=0;
+ 617              		.loc 1 279 7 is_stmt 1 view .LVU121
+ 618              		.loc 1 279 18 is_stmt 0 view .LVU122
+ 619 009c 0022     		movs	r2, #0
+ 620 009e 4270     		strb	r2, [r0, #1]
+ 621 00a0 CFE7     		b	.L57
+ 622              	.L61:
+ 623              	.LBE2:
+ 280:BSP/motor.c   **** 					}
+ 281:BSP/motor.c   **** 					break;
+ 282:BSP/motor.c   **** 			}
+ 283:BSP/motor.c   **** 		}
+ 284:BSP/motor.c   **** }
+ 624              		.loc 1 284 1 view .LVU123
+ 625 00a2 38BD     		pop	{r3, r4, r5, pc}
+ 626              	.LVL53:
+ 627              	.L63:
+ 628              		.loc 1 284 1 view .LVU124
+ 629              		.align	2
+ 630              	.L62:
+ 631 00a4 00080140 		.word	1073809408
+ 632 00a8 00000000 		.word	.LANCHOR0
+ 633 00ac 00100140 		.word	1073811456
+ 634              		.cfi_endproc
+ 635              	.LFE80:
+ 637              		.global	__aeabi_i2f
+ 638              		.global	__aeabi_fcmpeq
+ 639              		.global	__aeabi_f2iz
+ 640              		.section	.text.SpeedSetTimerFun,"ax",%progbits
+ 641              		.align	1
+ 642              		.global	SpeedSetTimerFun
+ 643              		.syntax unified
+ 644              		.thumb
+ 645              		.thumb_func
+ 647              	SpeedSetTimerFun:
+ 648              	.LVL54:
+ 649              	.LFB81:
+ 285:BSP/motor.c   **** 
+ 286:BSP/motor.c   **** uint8_t xtimer = 0;
+ 287:BSP/motor.c   **** 
+ 288:BSP/motor.c   **** /* 定时利用PID进行调速 */
+ 289:BSP/motor.c   **** void SpeedSetTimerFun( TimerHandle_t xTimer )
+ 290:BSP/motor.c   **** {
+ 650              		.loc 1 290 1 is_stmt 1 view -0
+ 651              		.cfi_startproc
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 18
+
+
+ 652              		@ args = 0, pretend = 0, frame = 0
+ 653              		@ frame_needed = 0, uses_anonymous_args = 0
+ 654              		.loc 1 290 1 is_stmt 0 view .LVU126
+ 655 0000 38B5     		push	{r3, r4, r5, lr}
+ 656              	.LCFI5:
+ 657              		.cfi_def_cfa_offset 16
+ 658              		.cfi_offset 3, -16
+ 659              		.cfi_offset 4, -12
+ 660              		.cfi_offset 5, -8
+ 661              		.cfi_offset 14, -4
+ 291:BSP/motor.c   **** 	xtimer++;
+ 662              		.loc 1 291 2 is_stmt 1 view .LVU127
+ 663              		.loc 1 291 8 is_stmt 0 view .LVU128
+ 664 0002 3B4A     		ldr	r2, .L83
+ 665 0004 1378     		ldrb	r3, [r2]	@ zero_extendqisi2
+ 666 0006 0133     		adds	r3, r3, #1
+ 667 0008 DBB2     		uxtb	r3, r3
+ 668 000a 1370     		strb	r3, [r2]
+ 292:BSP/motor.c   **** 	if(xtimer == 10)//电机二PID
+ 669              		.loc 1 292 2 is_stmt 1 view .LVU129
+ 670              		.loc 1 292 4 is_stmt 0 view .LVU130
+ 671 000c 0A2B     		cmp	r3, #10
+ 672 000e 13D0     		beq	.L82
+ 673              	.LVL55:
+ 674              	.L65:
+ 293:BSP/motor.c   **** 	{
+ 294:BSP/motor.c   **** 		xtimer = 0;
+ 295:BSP/motor.c   **** 		motor2.speed = motor2.timers;
+ 296:BSP/motor.c   **** 		if(motor2.TPID.setpoint == 0)
+ 297:BSP/motor.c   **** 		{
+ 298:BSP/motor.c   **** 			Motor_SetSpeed(2,0);
+ 299:BSP/motor.c   **** 		}
+ 300:BSP/motor.c   **** 		else
+ 301:BSP/motor.c   **** 		{
+ 302:BSP/motor.c   **** 			Motor_SetSpeed(2, (int)(PID_Compute(&motor2.TPID,motor2.speed))+motor2.CompSpeed);
+ 303:BSP/motor.c   **** 		}
+ 304:BSP/motor.c   **** 		motor2.timers = 0;
+ 305:BSP/motor.c   **** 
+ 306:BSP/motor.c   **** 
+ 307:BSP/motor.c   **** 		motor3.speed = motor3.timers;
+ 308:BSP/motor.c   **** 		if(motor3.TPID.setpoint == 0)
+ 309:BSP/motor.c   **** 		{
+ 310:BSP/motor.c   **** 			Motor_SetSpeed(3,0);
+ 311:BSP/motor.c   **** 		}
+ 312:BSP/motor.c   **** 		else
+ 313:BSP/motor.c   **** 		{
+ 314:BSP/motor.c   **** 			Motor_SetSpeed(3, (int)(PID_Compute(&motor3.TPID,motor3.speed))+motor3.CompSpeed);
+ 315:BSP/motor.c   **** 		}
+ 316:BSP/motor.c   **** 		motor3.timers = 0;
+ 317:BSP/motor.c   **** 	}
+ 318:BSP/motor.c   **** 
+ 319:BSP/motor.c   **** 	motor1.speed = motor1.timers;
+ 675              		.loc 1 319 2 is_stmt 1 view .LVU131
+ 676              		.loc 1 319 23 is_stmt 0 view .LVU132
+ 677 0010 384D     		ldr	r5, .L83+4
+ 678              		.loc 1 319 15 view .LVU133
+ 679 0012 2868     		ldr	r0, [r5]
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 19
+
+
+ 680 0014 FFF7FEFF 		bl	__aeabi_i2f
+ 681              	.LVL56:
+ 682 0018 0446     		mov	r4, r0
+ 683 001a E860     		str	r0, [r5, #12]	@ float
+ 320:BSP/motor.c   **** 	if(motor1.TPID.setpoint == 0)
+ 684              		.loc 1 320 2 is_stmt 1 view .LVU134
+ 685              		.loc 1 320 4 is_stmt 0 view .LVU135
+ 686 001c 0021     		movs	r1, #0
+ 687 001e 286A     		ldr	r0, [r5, #32]	@ float
+ 688 0020 FFF7FEFF 		bl	__aeabi_fcmpeq
+ 689              	.LVL57:
+ 690 0024 0028     		cmp	r0, #0
+ 691 0026 51D0     		beq	.L80
+ 321:BSP/motor.c   **** 	{
+ 322:BSP/motor.c   **** 		Motor_SetSpeed(1,0);
+ 692              		.loc 1 322 3 is_stmt 1 view .LVU136
+ 693 0028 0021     		movs	r1, #0
+ 694 002a 0120     		movs	r0, #1
+ 695 002c FFF7FEFF 		bl	Motor_SetSpeed
+ 696              	.LVL58:
+ 697              	.L74:
+ 323:BSP/motor.c   **** 	}
+ 324:BSP/motor.c   **** 	else
+ 325:BSP/motor.c   **** 	{
+ 326:BSP/motor.c   **** 		Motor_SetSpeed(1, (int)(PID_Compute(&motor1.TPID,motor1.speed))+motor1.CompSpeed);
+ 327:BSP/motor.c   **** 	}
+ 328:BSP/motor.c   **** 	motor1.timers = 0;
+ 698              		.loc 1 328 2 view .LVU137
+ 699              		.loc 1 328 16 is_stmt 0 view .LVU138
+ 700 0030 304B     		ldr	r3, .L83+4
+ 701 0032 0022     		movs	r2, #0
+ 702 0034 1A60     		str	r2, [r3]
+ 329:BSP/motor.c   **** 
+ 330:BSP/motor.c   **** }
+ 703              		.loc 1 330 1 view .LVU139
+ 704 0036 38BD     		pop	{r3, r4, r5, pc}
+ 705              	.LVL59:
+ 706              	.L82:
+ 294:BSP/motor.c   **** 		motor2.speed = motor2.timers;
+ 707              		.loc 1 294 3 is_stmt 1 view .LVU140
+ 294:BSP/motor.c   **** 		motor2.speed = motor2.timers;
+ 708              		.loc 1 294 10 is_stmt 0 view .LVU141
+ 709 0038 1346     		mov	r3, r2
+ 710 003a 0022     		movs	r2, #0
+ 711 003c 1A70     		strb	r2, [r3]
+ 295:BSP/motor.c   **** 		if(motor2.TPID.setpoint == 0)
+ 712              		.loc 1 295 3 is_stmt 1 view .LVU142
+ 295:BSP/motor.c   **** 		if(motor2.TPID.setpoint == 0)
+ 713              		.loc 1 295 24 is_stmt 0 view .LVU143
+ 714 003e 2E4D     		ldr	r5, .L83+8
+ 295:BSP/motor.c   **** 		if(motor2.TPID.setpoint == 0)
+ 715              		.loc 1 295 16 view .LVU144
+ 716 0040 2868     		ldr	r0, [r5]
+ 717              	.LVL60:
+ 295:BSP/motor.c   **** 		if(motor2.TPID.setpoint == 0)
+ 718              		.loc 1 295 16 view .LVU145
+ 719 0042 FFF7FEFF 		bl	__aeabi_i2f
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 20
+
+
+ 720              	.LVL61:
+ 721 0046 0446     		mov	r4, r0
+ 722 0048 E860     		str	r0, [r5, #12]	@ float
+ 296:BSP/motor.c   **** 		{
+ 723              		.loc 1 296 3 is_stmt 1 view .LVU146
+ 296:BSP/motor.c   **** 		{
+ 724              		.loc 1 296 5 is_stmt 0 view .LVU147
+ 725 004a 0021     		movs	r1, #0
+ 726 004c 286A     		ldr	r0, [r5, #32]	@ float
+ 727 004e FFF7FEFF 		bl	__aeabi_fcmpeq
+ 728              	.LVL62:
+ 729 0052 C8B1     		cbz	r0, .L78
+ 298:BSP/motor.c   **** 		}
+ 730              		.loc 1 298 4 is_stmt 1 view .LVU148
+ 731 0054 0021     		movs	r1, #0
+ 732 0056 0220     		movs	r0, #2
+ 733 0058 FFF7FEFF 		bl	Motor_SetSpeed
+ 734              	.LVL63:
+ 735              	.L68:
+ 304:BSP/motor.c   **** 
+ 736              		.loc 1 304 3 view .LVU149
+ 304:BSP/motor.c   **** 
+ 737              		.loc 1 304 17 is_stmt 0 view .LVU150
+ 738 005c 264B     		ldr	r3, .L83+8
+ 739 005e 0022     		movs	r2, #0
+ 740 0060 1A60     		str	r2, [r3]
+ 307:BSP/motor.c   **** 		if(motor3.TPID.setpoint == 0)
+ 741              		.loc 1 307 3 is_stmt 1 view .LVU151
+ 307:BSP/motor.c   **** 		if(motor3.TPID.setpoint == 0)
+ 742              		.loc 1 307 24 is_stmt 0 view .LVU152
+ 743 0062 264D     		ldr	r5, .L83+12
+ 307:BSP/motor.c   **** 		if(motor3.TPID.setpoint == 0)
+ 744              		.loc 1 307 16 view .LVU153
+ 745 0064 2868     		ldr	r0, [r5]
+ 746 0066 FFF7FEFF 		bl	__aeabi_i2f
+ 747              	.LVL64:
+ 748 006a 0446     		mov	r4, r0
+ 749 006c E860     		str	r0, [r5, #12]	@ float
+ 308:BSP/motor.c   **** 		{
+ 750              		.loc 1 308 3 is_stmt 1 view .LVU154
+ 308:BSP/motor.c   **** 		{
+ 751              		.loc 1 308 5 is_stmt 0 view .LVU155
+ 752 006e 0021     		movs	r1, #0
+ 753 0070 286A     		ldr	r0, [r5, #32]	@ float
+ 754 0072 FFF7FEFF 		bl	__aeabi_fcmpeq
+ 755              	.LVL65:
+ 756 0076 C0B1     		cbz	r0, .L79
+ 310:BSP/motor.c   **** 		}
+ 757              		.loc 1 310 4 is_stmt 1 view .LVU156
+ 758 0078 0021     		movs	r1, #0
+ 759 007a 0320     		movs	r0, #3
+ 760 007c FFF7FEFF 		bl	Motor_SetSpeed
+ 761              	.LVL66:
+ 762              	.L71:
+ 316:BSP/motor.c   **** 	}
+ 763              		.loc 1 316 3 view .LVU157
+ 316:BSP/motor.c   **** 	}
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 21
+
+
+ 764              		.loc 1 316 17 is_stmt 0 view .LVU158
+ 765 0080 1E4B     		ldr	r3, .L83+12
+ 766 0082 0022     		movs	r2, #0
+ 767 0084 1A60     		str	r2, [r3]
+ 768 0086 C3E7     		b	.L65
+ 769              	.L78:
+ 302:BSP/motor.c   **** 		}
+ 770              		.loc 1 302 4 is_stmt 1 view .LVU159
+ 302:BSP/motor.c   **** 		}
+ 771              		.loc 1 302 28 is_stmt 0 view .LVU160
+ 772 0088 1B4D     		ldr	r5, .L83+8
+ 773 008a 2146     		mov	r1, r4
+ 774 008c 05F11400 		add	r0, r5, #20
+ 775 0090 FFF7FEFF 		bl	PID_Compute
+ 776              	.LVL67:
+ 302:BSP/motor.c   **** 		}
+ 777              		.loc 1 302 22 view .LVU161
+ 778 0094 FFF7FEFF 		bl	__aeabi_f2iz
+ 779              	.LVL68:
+ 302:BSP/motor.c   **** 		}
+ 780              		.loc 1 302 74 view .LVU162
+ 781 0098 6B68     		ldr	r3, [r5, #4]
+ 302:BSP/motor.c   **** 		}
+ 782              		.loc 1 302 4 view .LVU163
+ 783 009a 1844     		add	r0, r0, r3
+ 784 009c FFF7FEFF 		bl	__aeabi_i2f
+ 785              	.LVL69:
+ 786 00a0 0146     		mov	r1, r0
+ 787 00a2 0220     		movs	r0, #2
+ 788 00a4 FFF7FEFF 		bl	Motor_SetSpeed
+ 789              	.LVL70:
+ 790 00a8 D8E7     		b	.L68
+ 791              	.L79:
+ 314:BSP/motor.c   **** 		}
+ 792              		.loc 1 314 4 is_stmt 1 view .LVU164
+ 314:BSP/motor.c   **** 		}
+ 793              		.loc 1 314 28 is_stmt 0 view .LVU165
+ 794 00aa 144D     		ldr	r5, .L83+12
+ 795 00ac 2146     		mov	r1, r4
+ 796 00ae 05F11400 		add	r0, r5, #20
+ 797 00b2 FFF7FEFF 		bl	PID_Compute
+ 798              	.LVL71:
+ 314:BSP/motor.c   **** 		}
+ 799              		.loc 1 314 22 view .LVU166
+ 800 00b6 FFF7FEFF 		bl	__aeabi_f2iz
+ 801              	.LVL72:
+ 314:BSP/motor.c   **** 		}
+ 802              		.loc 1 314 74 view .LVU167
+ 803 00ba 6B68     		ldr	r3, [r5, #4]
+ 314:BSP/motor.c   **** 		}
+ 804              		.loc 1 314 4 view .LVU168
+ 805 00bc 1844     		add	r0, r0, r3
+ 806 00be FFF7FEFF 		bl	__aeabi_i2f
+ 807              	.LVL73:
+ 808 00c2 0146     		mov	r1, r0
+ 809 00c4 0320     		movs	r0, #3
+ 810 00c6 FFF7FEFF 		bl	Motor_SetSpeed
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 22
+
+
+ 811              	.LVL74:
+ 812 00ca D9E7     		b	.L71
+ 813              	.L80:
+ 326:BSP/motor.c   **** 	}
+ 814              		.loc 1 326 3 is_stmt 1 view .LVU169
+ 326:BSP/motor.c   **** 	}
+ 815              		.loc 1 326 27 is_stmt 0 view .LVU170
+ 816 00cc 094D     		ldr	r5, .L83+4
+ 817 00ce 2146     		mov	r1, r4
+ 818 00d0 05F11400 		add	r0, r5, #20
+ 819 00d4 FFF7FEFF 		bl	PID_Compute
+ 820              	.LVL75:
+ 326:BSP/motor.c   **** 	}
+ 821              		.loc 1 326 21 view .LVU171
+ 822 00d8 FFF7FEFF 		bl	__aeabi_f2iz
+ 823              	.LVL76:
+ 326:BSP/motor.c   **** 	}
+ 824              		.loc 1 326 73 view .LVU172
+ 825 00dc 6B68     		ldr	r3, [r5, #4]
+ 326:BSP/motor.c   **** 	}
+ 826              		.loc 1 326 3 view .LVU173
+ 827 00de 1844     		add	r0, r0, r3
+ 828 00e0 FFF7FEFF 		bl	__aeabi_i2f
+ 829              	.LVL77:
+ 830 00e4 0146     		mov	r1, r0
+ 831 00e6 0120     		movs	r0, #1
+ 832 00e8 FFF7FEFF 		bl	Motor_SetSpeed
+ 833              	.LVL78:
+ 834 00ec A0E7     		b	.L74
+ 835              	.L84:
+ 836 00ee 00BF     		.align	2
+ 837              	.L83:
+ 838 00f0 00000000 		.word	.LANCHOR1
+ 839 00f4 00000000 		.word	.LANCHOR4
+ 840 00f8 00000000 		.word	.LANCHOR2
+ 841 00fc 00000000 		.word	.LANCHOR3
+ 842              		.cfi_endproc
+ 843              	.LFE81:
+ 845              		.section	.text.Motor_SetCompSpeed,"ax",%progbits
+ 846              		.align	1
+ 847              		.global	Motor_SetCompSpeed
+ 848              		.syntax unified
+ 849              		.thumb
+ 850              		.thumb_func
+ 852              	Motor_SetCompSpeed:
+ 853              	.LVL79:
+ 854              	.LFB82:
+ 331:BSP/motor.c   **** 
+ 332:BSP/motor.c   **** void Motor_SetCompSpeed(MOTOR *motor,uint16_t speed)
+ 333:BSP/motor.c   **** {
+ 855              		.loc 1 333 1 is_stmt 1 view -0
+ 856              		.cfi_startproc
+ 857              		@ args = 0, pretend = 0, frame = 0
+ 858              		@ frame_needed = 0, uses_anonymous_args = 0
+ 859              		@ link register save eliminated.
+ 334:BSP/motor.c   **** 	motor->CompSpeed = speed;
+ 860              		.loc 1 334 2 view .LVU175
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 23
+
+
+ 861              		.loc 1 334 19 is_stmt 0 view .LVU176
+ 862 0000 4160     		str	r1, [r0, #4]
+ 335:BSP/motor.c   **** }
+ 863              		.loc 1 335 1 view .LVU177
+ 864 0002 7047     		bx	lr
+ 865              		.cfi_endproc
+ 866              	.LFE82:
+ 868              		.global	__aeabi_fcmplt
+ 869              		.section	.text.PID_setMotorPoint,"ax",%progbits
+ 870              		.align	1
+ 871              		.global	PID_setMotorPoint
+ 872              		.syntax unified
+ 873              		.thumb
+ 874              		.thumb_func
+ 876              	PID_setMotorPoint:
+ 877              	.LVL80:
+ 878              	.LFB83:
+ 336:BSP/motor.c   **** 
+ 337:BSP/motor.c   **** void PID_setMotorPoint(MOTOR *motor,float speed)
+ 338:BSP/motor.c   **** {
+ 879              		.loc 1 338 1 is_stmt 1 view -0
+ 880              		.cfi_startproc
+ 881              		@ args = 0, pretend = 0, frame = 0
+ 882              		@ frame_needed = 0, uses_anonymous_args = 0
+ 883              		.loc 1 338 1 is_stmt 0 view .LVU179
+ 884 0000 38B5     		push	{r3, r4, r5, lr}
+ 885              	.LCFI6:
+ 886              		.cfi_def_cfa_offset 16
+ 887              		.cfi_offset 3, -16
+ 888              		.cfi_offset 4, -12
+ 889              		.cfi_offset 5, -8
+ 890              		.cfi_offset 14, -4
+ 891 0002 0446     		mov	r4, r0
+ 892 0004 0D46     		mov	r5, r1
+ 339:BSP/motor.c   **** 
+ 340:BSP/motor.c   **** 		if(speed < 0)//设置速度补偿
+ 893              		.loc 1 340 3 is_stmt 1 view .LVU180
+ 894              		.loc 1 340 5 is_stmt 0 view .LVU181
+ 895 0006 0021     		movs	r1, #0
+ 896              	.LVL81:
+ 897              		.loc 1 340 5 view .LVU182
+ 898 0008 2846     		mov	r0, r5
+ 899              	.LVL82:
+ 900              		.loc 1 340 5 view .LVU183
+ 901 000a FFF7FEFF 		bl	__aeabi_fcmplt
+ 902              	.LVL83:
+ 903 000e 18B9     		cbnz	r0, .L93
+ 341:BSP/motor.c   **** 		{
+ 342:BSP/motor.c   **** 			motor->CompSpeed = motor->_SPEED * -1;
+ 343:BSP/motor.c   **** 		}
+ 344:BSP/motor.c   **** 		else
+ 345:BSP/motor.c   **** 		{
+ 346:BSP/motor.c   **** 
+ 347:BSP/motor.c   **** 			motor->CompSpeed = motor->_SPEED;
+ 904              		.loc 1 347 4 is_stmt 1 view .LVU184
+ 905              		.loc 1 347 28 is_stmt 0 view .LVU185
+ 906 0010 A368     		ldr	r3, [r4, #8]
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 24
+
+
+ 907              		.loc 1 347 21 view .LVU186
+ 908 0012 6360     		str	r3, [r4, #4]
+ 909              	.L89:
+ 348:BSP/motor.c   **** 		}
+ 349:BSP/motor.c   **** 		motor->TPID.setpoint = speed;
+ 910              		.loc 1 349 3 is_stmt 1 view .LVU187
+ 911              		.loc 1 349 24 is_stmt 0 view .LVU188
+ 912 0014 2562     		str	r5, [r4, #32]	@ float
+ 350:BSP/motor.c   **** 
+ 351:BSP/motor.c   **** }
+ 913              		.loc 1 351 1 view .LVU189
+ 914 0016 38BD     		pop	{r3, r4, r5, pc}
+ 915              	.LVL84:
+ 916              	.L93:
+ 342:BSP/motor.c   **** 		}
+ 917              		.loc 1 342 4 is_stmt 1 view .LVU190
+ 342:BSP/motor.c   **** 		}
+ 918              		.loc 1 342 28 is_stmt 0 view .LVU191
+ 919 0018 A368     		ldr	r3, [r4, #8]
+ 342:BSP/motor.c   **** 		}
+ 920              		.loc 1 342 37 view .LVU192
+ 921 001a 5B42     		rsbs	r3, r3, #0
+ 342:BSP/motor.c   **** 		}
+ 922              		.loc 1 342 21 view .LVU193
+ 923 001c 6360     		str	r3, [r4, #4]
+ 924 001e F9E7     		b	.L89
+ 925              		.cfi_endproc
+ 926              	.LFE83:
+ 928              		.section	.rodata.Motor_Task.str1.4,"aMS",%progbits,1
+ 929              		.align	2
+ 930              	.LC0:
+ 931 0000 4D6F746F 		.ascii	"Motor Task\000"
+ 931      72205461 
+ 931      736B00
+ 932              		.global	__aeabi_fmul
+ 933              		.global	__aeabi_f2d
+ 934 000b 00       		.align	2
+ 935              	.LC1:
+ 936 000c 4D313A54 		.ascii	"M1:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f\000"
+ 936      3A25302E 
+ 936      32662C4F 
+ 936      3A25302E 
+ 936      32662C56 
+ 937 003e 0000     		.align	2
+ 938              	.LC2:
+ 939 0040 4D323A54 		.ascii	"M2:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f\000"
+ 939      3A25302E 
+ 939      32662C4F 
+ 939      3A25302E 
+ 939      32662C56 
+ 940 0072 0000     		.align	2
+ 941              	.LC3:
+ 942 0074 4D333A54 		.ascii	"M3:T:%0.2f,O:%0.2f,V:%0.2f,C:%03d,I:%0.2f,E:%0.2f\000"
+ 942      3A25302E 
+ 942      32662C4F 
+ 942      3A25302E 
+ 942      32662C56 
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 25
+
+
+ 943              		.section	.text.Motor_Task,"ax",%progbits
+ 944              		.align	1
+ 945              		.global	Motor_Task
+ 946              		.syntax unified
+ 947              		.thumb
+ 948              		.thumb_func
+ 950              	Motor_Task:
+ 951              	.LVL85:
+ 952              	.LFB72:
+  28:BSP/motor.c   **** 
+ 953              		.loc 1 28 1 is_stmt 1 view -0
+ 954              		.cfi_startproc
+ 955              		@ args = 0, pretend = 0, frame = 0
+ 956              		@ frame_needed = 0, uses_anonymous_args = 0
+  28:BSP/motor.c   **** 
+ 957              		.loc 1 28 1 is_stmt 0 view .LVU195
+ 958 0000 2DE9F04F 		push	{r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 959              	.LCFI7:
+ 960              		.cfi_def_cfa_offset 36
+ 961              		.cfi_offset 4, -36
+ 962              		.cfi_offset 5, -32
+ 963              		.cfi_offset 6, -28
+ 964              		.cfi_offset 7, -24
+ 965              		.cfi_offset 8, -20
+ 966              		.cfi_offset 9, -16
+ 967              		.cfi_offset 10, -12
+ 968              		.cfi_offset 11, -8
+ 969              		.cfi_offset 14, -4
+ 970 0004 8BB0     		sub	sp, sp, #44
+ 971              	.LCFI8:
+ 972              		.cfi_def_cfa_offset 80
+  30:BSP/motor.c   **** 
+ 973              		.loc 1 30 2 is_stmt 1 view .LVU196
+ 974 0006 FFF7FEFF 		bl	Motor_Config
+ 975              	.LVL86:
+  32:BSP/motor.c   **** 	motor2._SPEED = 600;
+ 976              		.loc 1 32 2 view .LVU197
+  32:BSP/motor.c   **** 	motor2._SPEED = 600;
+ 977              		.loc 1 32 16 is_stmt 0 view .LVU198
+ 978 000a AC4D     		ldr	r5, .L105
+ 979 000c 4FF4FA73 		mov	r3, #500
+ 980 0010 AB60     		str	r3, [r5, #8]
+  33:BSP/motor.c   **** 	motor3._SPEED = 350;
+ 981              		.loc 1 33 2 is_stmt 1 view .LVU199
+  33:BSP/motor.c   **** 	motor3._SPEED = 350;
+ 982              		.loc 1 33 16 is_stmt 0 view .LVU200
+ 983 0012 AB4F     		ldr	r7, .L105+4
+ 984 0014 4FF41673 		mov	r3, #600
+ 985 0018 BB60     		str	r3, [r7, #8]
+  34:BSP/motor.c   **** 
+ 986              		.loc 1 34 2 is_stmt 1 view .LVU201
+  34:BSP/motor.c   **** 
+ 987              		.loc 1 34 16 is_stmt 0 view .LVU202
+ 988 001a AA4E     		ldr	r6, .L105+8
+ 989 001c 4FF4AF73 		mov	r3, #350
+ 990 0020 B360     		str	r3, [r6, #8]
+  36:BSP/motor.c   **** 	motor2.ResetTime = 2000;
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 26
+
+
+ 991              		.loc 1 36 2 is_stmt 1 view .LVU203
+  36:BSP/motor.c   **** 	motor2.ResetTime = 2000;
+ 992              		.loc 1 36 19 is_stmt 0 view .LVU204
+ 993 0022 4FF4FA62 		mov	r2, #2000
+ 994 0026 2A64     		str	r2, [r5, #64]
+  37:BSP/motor.c   **** 	motor3.ResetTime = 2000;
+ 995              		.loc 1 37 2 is_stmt 1 view .LVU205
+  37:BSP/motor.c   **** 	motor3.ResetTime = 2000;
+ 996              		.loc 1 37 19 is_stmt 0 view .LVU206
+ 997 0028 3A64     		str	r2, [r7, #64]
+  38:BSP/motor.c   **** 
+ 998              		.loc 1 38 2 is_stmt 1 view .LVU207
+  38:BSP/motor.c   **** 
+ 999              		.loc 1 38 19 is_stmt 0 view .LVU208
+ 1000 002a 3264     		str	r2, [r6, #64]
+  40:BSP/motor.c   **** 	xTimerChangePeriod(xOneShotTimer1,motor1.ResetTime,0);
+ 1001              		.loc 1 40 2 is_stmt 1 view .LVU209
+ 1002 002c DFF89882 		ldr	r8, .L105+12
+ 1003 0030 0024     		movs	r4, #0
+ 1004 0032 0094     		str	r4, [sp]
+ 1005 0034 2346     		mov	r3, r4
+ 1006 0036 0421     		movs	r1, #4
+ 1007 0038 D8F80000 		ldr	r0, [r8]
+ 1008 003c FFF7FEFF 		bl	xTimerGenericCommand
+ 1009              	.LVL87:
+  41:BSP/motor.c   **** 	xTimerChangePeriod(xOneShotTimer1,motor1.ResetTime,0);
+ 1010              		.loc 1 41 2 view .LVU210
+ 1011 0040 0094     		str	r4, [sp]
+ 1012 0042 2346     		mov	r3, r4
+ 1013 0044 2A6C     		ldr	r2, [r5, #64]
+ 1014 0046 0421     		movs	r1, #4
+ 1015 0048 D8F80000 		ldr	r0, [r8]
+ 1016 004c FFF7FEFF 		bl	xTimerGenericCommand
+ 1017              	.LVL88:
+  42:BSP/motor.c   **** 
+ 1018              		.loc 1 42 2 view .LVU211
+ 1019 0050 0094     		str	r4, [sp]
+ 1020 0052 2346     		mov	r3, r4
+ 1021 0054 2A6C     		ldr	r2, [r5, #64]
+ 1022 0056 0421     		movs	r1, #4
+ 1023 0058 D8F80000 		ldr	r0, [r8]
+ 1024 005c FFF7FEFF 		bl	xTimerGenericCommand
+ 1025              	.LVL89:
+  44:BSP/motor.c   **** 	motor2.CompSpeed = motor2._SPEED;
+ 1026              		.loc 1 44 2 view .LVU212
+  44:BSP/motor.c   **** 	motor2.CompSpeed = motor2._SPEED;
+ 1027              		.loc 1 44 27 is_stmt 0 view .LVU213
+ 1028 0060 AB68     		ldr	r3, [r5, #8]
+  44:BSP/motor.c   **** 	motor2.CompSpeed = motor2._SPEED;
+ 1029              		.loc 1 44 19 view .LVU214
+ 1030 0062 6B60     		str	r3, [r5, #4]
+  45:BSP/motor.c   **** 	motor3.CompSpeed = motor3._SPEED;
+ 1031              		.loc 1 45 2 is_stmt 1 view .LVU215
+  45:BSP/motor.c   **** 	motor3.CompSpeed = motor3._SPEED;
+ 1032              		.loc 1 45 27 is_stmt 0 view .LVU216
+ 1033 0064 BB68     		ldr	r3, [r7, #8]
+  45:BSP/motor.c   **** 	motor3.CompSpeed = motor3._SPEED;
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 27
+
+
+ 1034              		.loc 1 45 19 view .LVU217
+ 1035 0066 7B60     		str	r3, [r7, #4]
+  46:BSP/motor.c   **** 
+ 1036              		.loc 1 46 2 is_stmt 1 view .LVU218
+  46:BSP/motor.c   **** 
+ 1037              		.loc 1 46 27 is_stmt 0 view .LVU219
+ 1038 0068 B368     		ldr	r3, [r6, #8]
+  46:BSP/motor.c   **** 
+ 1039              		.loc 1 46 19 view .LVU220
+ 1040 006a 7360     		str	r3, [r6, #4]
+  48:BSP/motor.c   **** 	xTimerStart(KeyTimerHandle,0);
+ 1041              		.loc 1 48 2 is_stmt 1 view .LVU221
+ 1042 006c 974B     		ldr	r3, .L105+16
+ 1043 006e D3F80080 		ldr	r8, [r3]
+ 1044 0072 FFF7FEFF 		bl	xTaskGetTickCount
+ 1045              	.LVL90:
+ 1046 0076 0246     		mov	r2, r0
+ 1047 0078 0094     		str	r4, [sp]
+ 1048 007a 2346     		mov	r3, r4
+ 1049 007c 0121     		movs	r1, #1
+ 1050 007e 4046     		mov	r0, r8
+ 1051 0080 FFF7FEFF 		bl	xTimerGenericCommand
+ 1052              	.LVL91:
+  49:BSP/motor.c   **** 
+ 1053              		.loc 1 49 2 view .LVU222
+ 1054 0084 924B     		ldr	r3, .L105+20
+ 1055 0086 D3F80080 		ldr	r8, [r3]
+ 1056 008a FFF7FEFF 		bl	xTaskGetTickCount
+ 1057              	.LVL92:
+ 1058 008e 0246     		mov	r2, r0
+ 1059 0090 0094     		str	r4, [sp]
+ 1060 0092 2346     		mov	r3, r4
+ 1061 0094 0121     		movs	r1, #1
+ 1062 0096 4046     		mov	r0, r8
+ 1063 0098 FFF7FEFF 		bl	xTimerGenericCommand
+ 1064              	.LVL93:
+  51:BSP/motor.c   **** 	PID_Init(&motor1.TPID,1 ,0.1,0.05,0,-999,999 );
+ 1065              		.loc 1 51 2 view .LVU223
+ 1066 009c 8D48     		ldr	r0, .L105+24
+ 1067 009e FFF7FEFF 		bl	UartPrintf
+ 1068              	.LVL94:
+  52:BSP/motor.c   **** 	PID_Init(&motor2.TPID,1 ,0.5,0.05,0,-999,999);
+ 1069              		.loc 1 52 2 view .LVU224
+ 1070 00a2 DFF83482 		ldr	r8, .L105+28
+ 1071 00a6 DFF834B2 		ldr	fp, .L105+32
+ 1072 00aa CDF808B0 		str	fp, [sp, #8]	@ float
+ 1073 00ae DFF830A2 		ldr	r10, .L105+36
+ 1074 00b2 CDF804A0 		str	r10, [sp, #4]	@ float
+ 1075 00b6 4FF00009 		mov	r9, #0
+ 1076 00ba CDF80090 		str	r9, [sp]	@ float
+ 1077 00be 4346     		mov	r3, r8
+ 1078 00c0 884A     		ldr	r2, .L105+40
+ 1079 00c2 4FF07E51 		mov	r1, #1065353216
+ 1080 00c6 05F11400 		add	r0, r5, #20
+ 1081 00ca FFF7FEFF 		bl	PID_Init
+ 1082              	.LVL95:
+  53:BSP/motor.c   **** 	PID_Init(&motor3.TPID,1 ,0.5,0.05,0,-999,999);
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 28
+
+
+ 1083              		.loc 1 53 2 view .LVU225
+ 1084 00ce 4FF07C55 		mov	r5, #1056964608
+ 1085 00d2 CDF808B0 		str	fp, [sp, #8]	@ float
+ 1086 00d6 CDF804A0 		str	r10, [sp, #4]	@ float
+ 1087 00da CDF80090 		str	r9, [sp]	@ float
+ 1088 00de 4346     		mov	r3, r8
+ 1089 00e0 2A46     		mov	r2, r5
+ 1090 00e2 4FF07E51 		mov	r1, #1065353216
+ 1091 00e6 07F11400 		add	r0, r7, #20
+ 1092 00ea FFF7FEFF 		bl	PID_Init
+ 1093              	.LVL96:
+  54:BSP/motor.c   **** 
+ 1094              		.loc 1 54 2 view .LVU226
+ 1095 00ee CDF808B0 		str	fp, [sp, #8]	@ float
+ 1096 00f2 CDF804A0 		str	r10, [sp, #4]	@ float
+ 1097 00f6 CDF80090 		str	r9, [sp]	@ float
+ 1098 00fa 4346     		mov	r3, r8
+ 1099 00fc 2A46     		mov	r2, r5
+ 1100 00fe 4FF07E51 		mov	r1, #1065353216
+ 1101 0102 06F11400 		add	r0, r6, #20
+ 1102 0106 FFF7FEFF 		bl	PID_Init
+ 1103              	.LVL97:
+  56:BSP/motor.c   **** 	while(1)
+ 1104              		.loc 1 56 2 view .LVU227
+  56:BSP/motor.c   **** 	while(1)
+ 1105              		.loc 1 56 2 is_stmt 0 view .LVU228
+ 1106 010a 35E1     		b	.L99
+ 1107              	.LVL98:
+ 1108              	.L101:
+  62:BSP/motor.c   **** 						motor1.TPID.setpoint,motor1.TPID.output,motor1.speed,
+ 1109              		.loc 1 62 4 is_stmt 1 view .LVU229
+  63:BSP/motor.c   **** 						motor1.CompSpeed,motor1.TPID.integral*motor1.TPID.Ki,motor1.TPID.previous_error*motor1.TPID.K
+ 1110              		.loc 1 63 18 is_stmt 0 view .LVU230
+ 1111 010c 6B4C     		ldr	r4, .L105
+ 1112              	.LVL99:
+  63:BSP/motor.c   **** 						motor1.CompSpeed,motor1.TPID.integral*motor1.TPID.Ki,motor1.TPID.previous_error*motor1.TPID.K
+ 1113              		.loc 1 63 18 view .LVU231
+ 1114 010e 266A     		ldr	r6, [r4, #32]	@ float
+  63:BSP/motor.c   **** 						motor1.CompSpeed,motor1.TPID.integral*motor1.TPID.Ki,motor1.TPID.previous_error*motor1.TPID.K
+ 1115              		.loc 1 63 39 view .LVU232
+ 1116 0110 D4F82C90 		ldr	r9, [r4, #44]	@ float
+  63:BSP/motor.c   **** 						motor1.CompSpeed,motor1.TPID.integral*motor1.TPID.Ki,motor1.TPID.previous_error*motor1.TPID.K
+ 1117              		.loc 1 63 53 view .LVU233
+ 1118 0114 D4F80CA0 		ldr	r10, [r4, #12]	@ float
+  64:BSP/motor.c   **** 
+ 1119              		.loc 1 64 44 view .LVU234
+ 1120 0118 A169     		ldr	r1, [r4, #24]	@ float
+ 1121 011a 606A     		ldr	r0, [r4, #36]	@ float
+ 1122 011c FFF7FEFF 		bl	__aeabi_fmul
+ 1123              	.LVL100:
+ 1124 0120 0546     		mov	r5, r0
+  64:BSP/motor.c   **** 
+ 1125              		.loc 1 64 86 view .LVU235
+ 1126 0122 6169     		ldr	r1, [r4, #20]	@ float
+ 1127 0124 A06A     		ldr	r0, [r4, #40]	@ float
+ 1128 0126 FFF7FEFF 		bl	__aeabi_fmul
+ 1129              	.LVL101:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 29
+
+
+ 1130 012a 8046     		mov	r8, r0
+  62:BSP/motor.c   **** 						motor1.TPID.setpoint,motor1.TPID.output,motor1.speed,
+ 1131              		.loc 1 62 4 view .LVU236
+ 1132 012c 3046     		mov	r0, r6
+ 1133 012e FFF7FEFF 		bl	__aeabi_f2d
+ 1134              	.LVL102:
+ 1135 0132 0646     		mov	r6, r0
+ 1136 0134 0F46     		mov	r7, r1
+ 1137 0136 4046     		mov	r0, r8
+ 1138 0138 FFF7FEFF 		bl	__aeabi_f2d
+ 1139              	.LVL103:
+ 1140 013c CDE90801 		strd	r0, [sp, #32]
+ 1141 0140 2846     		mov	r0, r5
+ 1142 0142 FFF7FEFF 		bl	__aeabi_f2d
+ 1143              	.LVL104:
+ 1144 0146 CDE90601 		strd	r0, [sp, #24]
+ 1145 014a 6368     		ldr	r3, [r4, #4]
+ 1146 014c 0493     		str	r3, [sp, #16]
+ 1147 014e 5046     		mov	r0, r10
+ 1148 0150 FFF7FEFF 		bl	__aeabi_f2d
+ 1149              	.LVL105:
+ 1150 0154 CDE90201 		strd	r0, [sp, #8]
+ 1151 0158 4846     		mov	r0, r9
+ 1152 015a FFF7FEFF 		bl	__aeabi_f2d
+ 1153              	.LVL106:
+ 1154 015e CDE90001 		strd	r0, [sp]
+ 1155 0162 3246     		mov	r2, r6
+ 1156 0164 3B46     		mov	r3, r7
+ 1157 0166 6048     		ldr	r0, .L105+44
+ 1158 0168 FFF7FEFF 		bl	UartPrintf
+ 1159              	.LVL107:
+  66:BSP/motor.c   **** 						motor2.TPID.setpoint,motor2.TPID.output,motor2.speed,
+ 1160              		.loc 1 66 4 is_stmt 1 view .LVU237
+  67:BSP/motor.c   **** 						motor2.CompSpeed,motor2.TPID.integral*motor2.TPID.Ki,motor2.TPID.previous_error*motor2.TPID.K
+ 1161              		.loc 1 67 18 is_stmt 0 view .LVU238
+ 1162 016c 544C     		ldr	r4, .L105+4
+ 1163 016e 266A     		ldr	r6, [r4, #32]	@ float
+  67:BSP/motor.c   **** 						motor2.CompSpeed,motor2.TPID.integral*motor2.TPID.Ki,motor2.TPID.previous_error*motor2.TPID.K
+ 1164              		.loc 1 67 39 view .LVU239
+ 1165 0170 D4F82C90 		ldr	r9, [r4, #44]	@ float
+  67:BSP/motor.c   **** 						motor2.CompSpeed,motor2.TPID.integral*motor2.TPID.Ki,motor2.TPID.previous_error*motor2.TPID.K
+ 1166              		.loc 1 67 53 view .LVU240
+ 1167 0174 D4F80CA0 		ldr	r10, [r4, #12]	@ float
+  68:BSP/motor.c   **** 
+ 1168              		.loc 1 68 44 view .LVU241
+ 1169 0178 A169     		ldr	r1, [r4, #24]	@ float
+ 1170 017a 606A     		ldr	r0, [r4, #36]	@ float
+ 1171 017c FFF7FEFF 		bl	__aeabi_fmul
+ 1172              	.LVL108:
+ 1173 0180 0546     		mov	r5, r0
+  68:BSP/motor.c   **** 
+ 1174              		.loc 1 68 86 view .LVU242
+ 1175 0182 6169     		ldr	r1, [r4, #20]	@ float
+ 1176 0184 A06A     		ldr	r0, [r4, #40]	@ float
+ 1177 0186 FFF7FEFF 		bl	__aeabi_fmul
+ 1178              	.LVL109:
+ 1179 018a 8046     		mov	r8, r0
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 30
+
+
+  66:BSP/motor.c   **** 						motor2.TPID.setpoint,motor2.TPID.output,motor2.speed,
+ 1180              		.loc 1 66 4 view .LVU243
+ 1181 018c 3046     		mov	r0, r6
+ 1182 018e FFF7FEFF 		bl	__aeabi_f2d
+ 1183              	.LVL110:
+ 1184 0192 0646     		mov	r6, r0
+ 1185 0194 0F46     		mov	r7, r1
+ 1186 0196 4046     		mov	r0, r8
+ 1187 0198 FFF7FEFF 		bl	__aeabi_f2d
+ 1188              	.LVL111:
+ 1189 019c CDE90801 		strd	r0, [sp, #32]
+ 1190 01a0 2846     		mov	r0, r5
+ 1191 01a2 FFF7FEFF 		bl	__aeabi_f2d
+ 1192              	.LVL112:
+ 1193 01a6 CDE90601 		strd	r0, [sp, #24]
+ 1194 01aa 6368     		ldr	r3, [r4, #4]
+ 1195 01ac 0493     		str	r3, [sp, #16]
+ 1196 01ae 5046     		mov	r0, r10
+ 1197 01b0 FFF7FEFF 		bl	__aeabi_f2d
+ 1198              	.LVL113:
+ 1199 01b4 CDE90201 		strd	r0, [sp, #8]
+ 1200 01b8 4846     		mov	r0, r9
+ 1201 01ba FFF7FEFF 		bl	__aeabi_f2d
+ 1202              	.LVL114:
+ 1203 01be CDE90001 		strd	r0, [sp]
+ 1204 01c2 3246     		mov	r2, r6
+ 1205 01c4 3B46     		mov	r3, r7
+ 1206 01c6 4948     		ldr	r0, .L105+48
+ 1207 01c8 FFF7FEFF 		bl	UartPrintf
+ 1208              	.LVL115:
+  70:BSP/motor.c   **** 						motor3.TPID.setpoint,motor3.TPID.output,motor3.speed,
+ 1209              		.loc 1 70 4 is_stmt 1 view .LVU244
+  71:BSP/motor.c   **** 						motor3.CompSpeed,motor3.TPID.integral*motor3.TPID.Ki,motor3.TPID.previous_error*motor3.TPID.K
+ 1210              		.loc 1 71 18 is_stmt 0 view .LVU245
+ 1211 01cc 3D4C     		ldr	r4, .L105+8
+ 1212 01ce 266A     		ldr	r6, [r4, #32]	@ float
+  71:BSP/motor.c   **** 						motor3.CompSpeed,motor3.TPID.integral*motor3.TPID.Ki,motor3.TPID.previous_error*motor3.TPID.K
+ 1213              		.loc 1 71 39 view .LVU246
+ 1214 01d0 D4F82C90 		ldr	r9, [r4, #44]	@ float
+  71:BSP/motor.c   **** 						motor3.CompSpeed,motor3.TPID.integral*motor3.TPID.Ki,motor3.TPID.previous_error*motor3.TPID.K
+ 1215              		.loc 1 71 53 view .LVU247
+ 1216 01d4 D4F80CA0 		ldr	r10, [r4, #12]	@ float
+  72:BSP/motor.c   **** 
+ 1217              		.loc 1 72 44 view .LVU248
+ 1218 01d8 A169     		ldr	r1, [r4, #24]	@ float
+ 1219 01da 606A     		ldr	r0, [r4, #36]	@ float
+ 1220 01dc FFF7FEFF 		bl	__aeabi_fmul
+ 1221              	.LVL116:
+ 1222 01e0 0546     		mov	r5, r0
+  72:BSP/motor.c   **** 
+ 1223              		.loc 1 72 86 view .LVU249
+ 1224 01e2 6169     		ldr	r1, [r4, #20]	@ float
+ 1225 01e4 A06A     		ldr	r0, [r4, #40]	@ float
+ 1226 01e6 FFF7FEFF 		bl	__aeabi_fmul
+ 1227              	.LVL117:
+ 1228 01ea 8046     		mov	r8, r0
+  70:BSP/motor.c   **** 						motor3.TPID.setpoint,motor3.TPID.output,motor3.speed,
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 31
+
+
+ 1229              		.loc 1 70 4 view .LVU250
+ 1230 01ec 3046     		mov	r0, r6
+ 1231 01ee FFF7FEFF 		bl	__aeabi_f2d
+ 1232              	.LVL118:
+ 1233 01f2 0646     		mov	r6, r0
+ 1234 01f4 0F46     		mov	r7, r1
+ 1235 01f6 4046     		mov	r0, r8
+ 1236 01f8 FFF7FEFF 		bl	__aeabi_f2d
+ 1237              	.LVL119:
+ 1238 01fc CDE90801 		strd	r0, [sp, #32]
+ 1239 0200 2846     		mov	r0, r5
+ 1240 0202 FFF7FEFF 		bl	__aeabi_f2d
+ 1241              	.LVL120:
+ 1242 0206 CDE90601 		strd	r0, [sp, #24]
+ 1243 020a 6368     		ldr	r3, [r4, #4]
+ 1244 020c 0493     		str	r3, [sp, #16]
+ 1245 020e 5046     		mov	r0, r10
+ 1246 0210 FFF7FEFF 		bl	__aeabi_f2d
+ 1247              	.LVL121:
+ 1248 0214 CDE90201 		strd	r0, [sp, #8]
+ 1249 0218 4846     		mov	r0, r9
+ 1250 021a FFF7FEFF 		bl	__aeabi_f2d
+ 1251              	.LVL122:
+ 1252 021e CDE90001 		strd	r0, [sp]
+ 1253 0222 3246     		mov	r2, r6
+ 1254 0224 3B46     		mov	r3, r7
+ 1255 0226 3248     		ldr	r0, .L105+52
+ 1256 0228 FFF7FEFF 		bl	UartPrintf
+ 1257              	.LVL123:
+  74:BSP/motor.c   **** 		}
+ 1258              		.loc 1 74 4 is_stmt 1 view .LVU251
+  74:BSP/motor.c   **** 		}
+ 1259              		.loc 1 74 11 is_stmt 0 view .LVU252
+ 1260 022c 0024     		movs	r4, #0
+ 1261 022e A8E0     		b	.L95
+ 1262              	.LVL124:
+ 1263              	.L102:
+  80:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1264              		.loc 1 80 4 is_stmt 1 view .LVU253
+  80:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1265              		.loc 1 80 49 is_stmt 0 view .LVU254
+ 1266 0230 2248     		ldr	r0, .L105
+ 1267 0232 016A     		ldr	r1, [r0, #32]	@ float
+  80:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1268              		.loc 1 80 4 view .LVU255
+ 1269 0234 41F00041 		orr	r1, r1, #-2147483648
+ 1270 0238 FFF7FEFF 		bl	PID_setMotorPoint
+ 1271              	.LVL125:
+  81:BSP/motor.c   **** 			Motor_stop(1);
+ 1272              		.loc 1 81 4 is_stmt 1 view .LVU256
+ 1273 023c 4FF4FA70 		mov	r0, #500
+ 1274 0240 FFF7FEFF 		bl	vTaskDelay
+ 1275              	.LVL126:
+  82:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+ 1276              		.loc 1 82 4 view .LVU257
+ 1277 0244 0120     		movs	r0, #1
+ 1278 0246 FFF7FEFF 		bl	Motor_stop
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 32
+
+
+ 1279              	.LVL127:
+  83:BSP/motor.c   **** 			key[0].flag =0;
+ 1280              		.loc 1 83 4 view .LVU258
+ 1281 024a 1F4B     		ldr	r3, .L105+12
+ 1282 024c 1E68     		ldr	r6, [r3]
+ 1283 024e FFF7FEFF 		bl	xTaskGetTickCount
+ 1284              	.LVL128:
+ 1285 0252 0246     		mov	r2, r0
+ 1286 0254 0025     		movs	r5, #0
+ 1287 0256 0095     		str	r5, [sp]
+ 1288 0258 2B46     		mov	r3, r5
+ 1289 025a 0221     		movs	r1, #2
+ 1290 025c 3046     		mov	r0, r6
+ 1291 025e FFF7FEFF 		bl	xTimerGenericCommand
+ 1292              	.LVL129:
+  84:BSP/motor.c   **** 		}
+ 1293              		.loc 1 84 4 view .LVU259
+  84:BSP/motor.c   **** 		}
+ 1294              		.loc 1 84 16 is_stmt 0 view .LVU260
+ 1295 0262 244B     		ldr	r3, .L105+56
+ 1296 0264 1D70     		strb	r5, [r3]
+ 1297 0266 91E0     		b	.L96
+ 1298              	.L103:
+  88:BSP/motor.c   **** 			PID_setMotorPoint(&motor2,-1*fabs(motor2.TPID.setpoint));
+ 1299              		.loc 1 88 4 is_stmt 1 view .LVU261
+ 1300 0268 0120     		movs	r0, #1
+ 1301 026a FFF7FEFF 		bl	Motor_stop
+ 1302              	.LVL130:
+  89:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1303              		.loc 1 89 4 view .LVU262
+  89:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1304              		.loc 1 89 49 is_stmt 0 view .LVU263
+ 1305 026e 1448     		ldr	r0, .L105+4
+ 1306 0270 016A     		ldr	r1, [r0, #32]	@ float
+  89:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1307              		.loc 1 89 4 view .LVU264
+ 1308 0272 41F00041 		orr	r1, r1, #-2147483648
+ 1309 0276 FFF7FEFF 		bl	PID_setMotorPoint
+ 1310              	.LVL131:
+  90:BSP/motor.c   **** 			Motor_stop(2);
+ 1311              		.loc 1 90 4 is_stmt 1 view .LVU265
+ 1312 027a 4FF4FA70 		mov	r0, #500
+ 1313 027e FFF7FEFF 		bl	vTaskDelay
+ 1314              	.LVL132:
+  91:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+ 1315              		.loc 1 91 4 view .LVU266
+ 1316 0282 0220     		movs	r0, #2
+ 1317 0284 FFF7FEFF 		bl	Motor_stop
+ 1318              	.LVL133:
+  92:BSP/motor.c   **** 			xTimerReset(xOneShotTimer2,0);
+ 1319              		.loc 1 92 4 view .LVU267
+ 1320 0288 0F4B     		ldr	r3, .L105+12
+ 1321 028a 1E68     		ldr	r6, [r3]
+ 1322 028c FFF7FEFF 		bl	xTaskGetTickCount
+ 1323              	.LVL134:
+ 1324 0290 0246     		mov	r2, r0
+ 1325 0292 0025     		movs	r5, #0
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 33
+
+
+ 1326 0294 0095     		str	r5, [sp]
+ 1327 0296 2B46     		mov	r3, r5
+ 1328 0298 0221     		movs	r1, #2
+ 1329 029a 3046     		mov	r0, r6
+ 1330 029c FFF7FEFF 		bl	xTimerGenericCommand
+ 1331              	.LVL135:
+  93:BSP/motor.c   ****             key[1].flag =0;
+ 1332              		.loc 1 93 4 view .LVU268
+ 1333 02a0 154B     		ldr	r3, .L105+60
+ 1334 02a2 1E68     		ldr	r6, [r3]
+ 1335 02a4 FFF7FEFF 		bl	xTaskGetTickCount
+ 1336              	.LVL136:
+ 1337 02a8 0246     		mov	r2, r0
+ 1338 02aa 0095     		str	r5, [sp]
+ 1339 02ac 2B46     		mov	r3, r5
+ 1340 02ae 0221     		movs	r1, #2
+ 1341 02b0 3046     		mov	r0, r6
+ 1342 02b2 FFF7FEFF 		bl	xTimerGenericCommand
+ 1343              	.LVL137:
+  94:BSP/motor.c   ****         }
+ 1344              		.loc 1 94 13 view .LVU269
+  94:BSP/motor.c   ****         }
+ 1345              		.loc 1 94 25 is_stmt 0 view .LVU270
+ 1346 02b6 0F4B     		ldr	r3, .L105+56
+ 1347 02b8 DD70     		strb	r5, [r3, #3]
+ 1348 02ba 6CE0     		b	.L97
+ 1349              	.L106:
+ 1350              		.align	2
+ 1351              	.L105:
+ 1352 02bc 00000000 		.word	.LANCHOR4
+ 1353 02c0 00000000 		.word	.LANCHOR2
+ 1354 02c4 00000000 		.word	.LANCHOR3
+ 1355 02c8 00000000 		.word	.LANCHOR5
+ 1356 02cc 00000000 		.word	.LANCHOR6
+ 1357 02d0 00000000 		.word	.LANCHOR7
+ 1358 02d4 00000000 		.word	.LC0
+ 1359 02d8 CDCC4C3D 		.word	1028443341
+ 1360 02dc 00C07944 		.word	1148829696
+ 1361 02e0 00C079C4 		.word	-998653952
+ 1362 02e4 CDCCCC3D 		.word	1036831949
+ 1363 02e8 0C000000 		.word	.LC1
+ 1364 02ec 40000000 		.word	.LC2
+ 1365 02f0 74000000 		.word	.LC3
+ 1366 02f4 00000000 		.word	.LANCHOR0
+ 1367 02f8 00000000 		.word	.LANCHOR8
+ 1368              	.L104:
+  98:BSP/motor.c   **** 			Motor_stop(2);
+ 1369              		.loc 1 98 4 is_stmt 1 view .LVU271
+ 1370 02fc 0120     		movs	r0, #1
+ 1371 02fe FFF7FEFF 		bl	Motor_stop
+ 1372              	.LVL138:
+  99:BSP/motor.c   **** 			PID_setMotorPoint(&motor3,-1*fabs(motor3.TPID.setpoint));
+ 1373              		.loc 1 99 4 view .LVU272
+ 1374 0302 0220     		movs	r0, #2
+ 1375 0304 FFF7FEFF 		bl	Motor_stop
+ 1376              	.LVL139:
+ 100:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 34
+
+
+ 1377              		.loc 1 100 4 view .LVU273
+ 100:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1378              		.loc 1 100 49 is_stmt 0 view .LVU274
+ 1379 0308 2548     		ldr	r0, .L107
+ 1380 030a 016A     		ldr	r1, [r0, #32]	@ float
+ 100:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(500));
+ 1381              		.loc 1 100 4 view .LVU275
+ 1382 030c 41F00041 		orr	r1, r1, #-2147483648
+ 1383 0310 FFF7FEFF 		bl	PID_setMotorPoint
+ 1384              	.LVL140:
+ 101:BSP/motor.c   **** 			Motor_stop(3);
+ 1385              		.loc 1 101 4 is_stmt 1 view .LVU276
+ 1386 0314 4FF4FA70 		mov	r0, #500
+ 1387 0318 FFF7FEFF 		bl	vTaskDelay
+ 1388              	.LVL141:
+ 102:BSP/motor.c   **** 			vTaskDelay(pdMS_TO_TICKS(2000));
+ 1389              		.loc 1 102 4 view .LVU277
+ 1390 031c 0320     		movs	r0, #3
+ 1391 031e FFF7FEFF 		bl	Motor_stop
+ 1392              	.LVL142:
+ 103:BSP/motor.c   **** 			xTimerReset(xOneShotTimer1,0);
+ 1393              		.loc 1 103 4 view .LVU278
+ 1394 0322 4FF4FA60 		mov	r0, #2000
+ 1395 0326 FFF7FEFF 		bl	vTaskDelay
+ 1396              	.LVL143:
+ 104:BSP/motor.c   **** 			xTimerReset(xOneShotTimer2,0);
+ 1397              		.loc 1 104 4 view .LVU279
+ 1398 032a 1E4B     		ldr	r3, .L107+4
+ 1399 032c 1E68     		ldr	r6, [r3]
+ 1400 032e FFF7FEFF 		bl	xTaskGetTickCount
+ 1401              	.LVL144:
+ 1402 0332 0246     		mov	r2, r0
+ 1403 0334 0025     		movs	r5, #0
+ 1404 0336 0095     		str	r5, [sp]
+ 1405 0338 2B46     		mov	r3, r5
+ 1406 033a 0221     		movs	r1, #2
+ 1407 033c 3046     		mov	r0, r6
+ 1408 033e FFF7FEFF 		bl	xTimerGenericCommand
+ 1409              	.LVL145:
+ 105:BSP/motor.c   **** 			xTimerReset(xOneShotTimer3,0);
+ 1410              		.loc 1 105 4 view .LVU280
+ 1411 0342 194B     		ldr	r3, .L107+8
+ 1412 0344 1E68     		ldr	r6, [r3]
+ 1413 0346 FFF7FEFF 		bl	xTaskGetTickCount
+ 1414              	.LVL146:
+ 1415 034a 0246     		mov	r2, r0
+ 1416 034c 0095     		str	r5, [sp]
+ 1417 034e 2B46     		mov	r3, r5
+ 1418 0350 0221     		movs	r1, #2
+ 1419 0352 3046     		mov	r0, r6
+ 1420 0354 FFF7FEFF 		bl	xTimerGenericCommand
+ 1421              	.LVL147:
+ 106:BSP/motor.c   ****             key[2].flag =0;
+ 1422              		.loc 1 106 4 view .LVU281
+ 1423 0358 144B     		ldr	r3, .L107+12
+ 1424 035a 1E68     		ldr	r6, [r3]
+ 1425 035c FFF7FEFF 		bl	xTaskGetTickCount
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 35
+
+
+ 1426              	.LVL148:
+ 1427 0360 0246     		mov	r2, r0
+ 1428 0362 0095     		str	r5, [sp]
+ 1429 0364 2B46     		mov	r3, r5
+ 1430 0366 0221     		movs	r1, #2
+ 1431 0368 3046     		mov	r0, r6
+ 1432 036a FFF7FEFF 		bl	xTimerGenericCommand
+ 1433              	.LVL149:
+ 107:BSP/motor.c   **** 		}
+ 1434              		.loc 1 107 13 view .LVU282
+ 107:BSP/motor.c   **** 		}
+ 1435              		.loc 1 107 25 is_stmt 0 view .LVU283
+ 1436 036e 104B     		ldr	r3, .L107+16
+ 1437 0370 9D71     		strb	r5, [r3, #6]
+ 1438              	.L98:
+ 109:BSP/motor.c   **** 	}
+ 1439              		.loc 1 109 3 is_stmt 1 view .LVU284
+ 1440 0372 1420     		movs	r0, #20
+ 1441 0374 FFF7FEFF 		bl	vTaskDelay
+ 1442              	.LVL150:
+  57:BSP/motor.c   **** 	{
+ 1443              		.loc 1 57 7 view .LVU285
+ 1444              	.L99:
+  57:BSP/motor.c   **** 	{
+ 1445              		.loc 1 57 2 view .LVU286
+  59:BSP/motor.c   **** 		if(timers == 10)
+ 1446              		.loc 1 59 3 view .LVU287
+  59:BSP/motor.c   **** 		if(timers == 10)
+ 1447              		.loc 1 59 9 is_stmt 0 view .LVU288
+ 1448 0378 0134     		adds	r4, r4, #1
+ 1449              	.LVL151:
+  59:BSP/motor.c   **** 		if(timers == 10)
+ 1450              		.loc 1 59 9 view .LVU289
+ 1451 037a E4B2     		uxtb	r4, r4
+ 1452              	.LVL152:
+  60:BSP/motor.c   **** 		{
+ 1453              		.loc 1 60 3 is_stmt 1 view .LVU290
+  60:BSP/motor.c   **** 		{
+ 1454              		.loc 1 60 5 is_stmt 0 view .LVU291
+ 1455 037c 0A2C     		cmp	r4, #10
+ 1456 037e 3FF4C5AE 		beq	.L101
+ 1457              	.LVL153:
+ 1458              	.L95:
+  78:BSP/motor.c   **** 		{
+ 1459              		.loc 1 78 3 is_stmt 1 view .LVU292
+  78:BSP/motor.c   **** 		{
+ 1460              		.loc 1 78 12 is_stmt 0 view .LVU293
+ 1461 0382 0B4B     		ldr	r3, .L107+16
+ 1462 0384 1B78     		ldrb	r3, [r3]	@ zero_extendqisi2
+  78:BSP/motor.c   **** 		{
+ 1463              		.loc 1 78 5 view .LVU294
+ 1464 0386 002B     		cmp	r3, #0
+ 1465 0388 7FF452AF 		bne	.L102
+ 1466              	.L96:
+  86:BSP/motor.c   **** 		{
+ 1467              		.loc 1 86 3 is_stmt 1 view .LVU295
+  86:BSP/motor.c   **** 		{
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 36
+
+
+ 1468              		.loc 1 86 12 is_stmt 0 view .LVU296
+ 1469 038c 084B     		ldr	r3, .L107+16
+ 1470 038e DB78     		ldrb	r3, [r3, #3]	@ zero_extendqisi2
+  86:BSP/motor.c   **** 		{
+ 1471              		.loc 1 86 5 view .LVU297
+ 1472 0390 002B     		cmp	r3, #0
+ 1473 0392 7FF469AF 		bne	.L103
+ 1474              	.L97:
+  96:BSP/motor.c   **** 		{
+ 1475              		.loc 1 96 3 is_stmt 1 view .LVU298
+  96:BSP/motor.c   **** 		{
+ 1476              		.loc 1 96 12 is_stmt 0 view .LVU299
+ 1477 0396 064B     		ldr	r3, .L107+16
+ 1478 0398 9B79     		ldrb	r3, [r3, #6]	@ zero_extendqisi2
+  96:BSP/motor.c   **** 		{
+ 1479              		.loc 1 96 5 view .LVU300
+ 1480 039a 002B     		cmp	r3, #0
+ 1481 039c AED1     		bne	.L104
+ 1482 039e E8E7     		b	.L98
+ 1483              	.L108:
+ 1484              		.align	2
+ 1485              	.L107:
+ 1486 03a0 00000000 		.word	.LANCHOR3
+ 1487 03a4 00000000 		.word	.LANCHOR5
+ 1488 03a8 00000000 		.word	.LANCHOR8
+ 1489 03ac 00000000 		.word	.LANCHOR9
+ 1490 03b0 00000000 		.word	.LANCHOR0
+ 1491              		.cfi_endproc
+ 1492              	.LFE72:
+ 1494              		.section	.rodata.vONEShotTimerFunc1.str1.4,"aMS",%progbits,1
+ 1495              		.align	2
+ 1496              	.LC4:
+ 1497 0000 47657420 		.ascii	"Get semaphore failed1\000"
+ 1497      73656D61 
+ 1497      70686F72 
+ 1497      65206661 
+ 1497      696C6564 
+ 1498              		.section	.text.vONEShotTimerFunc1,"ax",%progbits
+ 1499              		.align	1
+ 1500              		.global	vONEShotTimerFunc1
+ 1501              		.syntax unified
+ 1502              		.thumb
+ 1503              		.thumb_func
+ 1505              	vONEShotTimerFunc1:
+ 1506              	.LVL154:
+ 1507              	.LFB77:
+ 212:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[0],0);
+ 1508              		.loc 1 212 1 is_stmt 1 view -0
+ 1509              		.cfi_startproc
+ 1510              		@ args = 0, pretend = 0, frame = 0
+ 1511              		@ frame_needed = 0, uses_anonymous_args = 0
+ 212:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[0],0);
+ 1512              		.loc 1 212 1 is_stmt 0 view .LVU302
+ 1513 0000 08B5     		push	{r3, lr}
+ 1514              	.LCFI9:
+ 1515              		.cfi_def_cfa_offset 8
+ 1516              		.cfi_offset 3, -8
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 37
+
+
+ 1517              		.cfi_offset 14, -4
+ 213:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1518              		.loc 1 213 2 is_stmt 1 view .LVU303
+ 213:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1519              		.loc 1 213 23 is_stmt 0 view .LVU304
+ 1520 0002 0022     		movs	r2, #0
+ 1521 0004 1146     		mov	r1, r2
+ 1522 0006 0C4B     		ldr	r3, .L114
+ 1523 0008 1868     		ldr	r0, [r3]
+ 1524              	.LVL155:
+ 213:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1525              		.loc 1 213 23 view .LVU305
+ 1526 000a FFF7FEFF 		bl	xQueueReceiveFromISR
+ 1527              	.LVL156:
+ 214:BSP/motor.c   **** 	{
+ 1528              		.loc 1 214 2 is_stmt 1 view .LVU306
+ 214:BSP/motor.c   **** 	{
+ 1529              		.loc 1 214 4 is_stmt 0 view .LVU307
+ 1530 000e 0128     		cmp	r0, #1
+ 1531 0010 03D0     		beq	.L113
+ 222:BSP/motor.c   **** 	}
+ 1532              		.loc 1 222 3 is_stmt 1 view .LVU308
+ 1533 0012 0A48     		ldr	r0, .L114+4
+ 1534              	.LVL157:
+ 222:BSP/motor.c   **** 	}
+ 1535              		.loc 1 222 3 is_stmt 0 view .LVU309
+ 1536 0014 FFF7FEFF 		bl	UartPrintf
+ 1537              	.LVL158:
+ 1538              	.L109:
+ 224:BSP/motor.c   **** void vONEShotTimerFunc2( TimerHandle_t xTimer ) //第二级传送带
+ 1539              		.loc 1 224 1 view .LVU310
+ 1540 0018 08BD     		pop	{r3, pc}
+ 1541              	.LVL159:
+ 1542              	.L113:
+ 216:BSP/motor.c   **** 		PID_setMotorPoint(&motor1,fabs(motor1.TPID.setpoint));
+ 1543              		.loc 1 216 3 is_stmt 1 view .LVU311
+ 1544 001a FFF7FEFF 		bl	Motor_start
+ 1545              	.LVL160:
+ 217:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[0],NULL);
+ 1546              		.loc 1 217 3 view .LVU312
+ 217:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[0],NULL);
+ 1547              		.loc 1 217 45 is_stmt 0 view .LVU313
+ 1548 001e 0848     		ldr	r0, .L114+8
+ 1549 0020 016A     		ldr	r1, [r0, #32]	@ float
+ 217:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[0],NULL);
+ 1550              		.loc 1 217 3 view .LVU314
+ 1551 0022 21F00041 		bic	r1, r1, #-2147483648
+ 1552 0026 FFF7FEFF 		bl	PID_setMotorPoint
+ 1553              	.LVL161:
+ 218:BSP/motor.c   **** 	}
+ 1554              		.loc 1 218 3 is_stmt 1 view .LVU315
+ 1555 002a 0021     		movs	r1, #0
+ 1556 002c 024B     		ldr	r3, .L114
+ 1557 002e 1868     		ldr	r0, [r3]
+ 1558 0030 FFF7FEFF 		bl	xQueueGiveFromISR
+ 1559              	.LVL162:
+ 1560 0034 F0E7     		b	.L109
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 38
+
+
+ 1561              	.L115:
+ 1562 0036 00BF     		.align	2
+ 1563              	.L114:
+ 1564 0038 00000000 		.word	.LANCHOR10
+ 1565 003c 00000000 		.word	.LC4
+ 1566 0040 00000000 		.word	.LANCHOR4
+ 1567              		.cfi_endproc
+ 1568              	.LFE77:
+ 1570              		.section	.rodata.vONEShotTimerFunc2.str1.4,"aMS",%progbits,1
+ 1571              		.align	2
+ 1572              	.LC5:
+ 1573 0000 47657420 		.ascii	"Get semaphore failed2\000"
+ 1573      73656D61 
+ 1573      70686F72 
+ 1573      65206661 
+ 1573      696C6564 
+ 1574              		.section	.text.vONEShotTimerFunc2,"ax",%progbits
+ 1575              		.align	1
+ 1576              		.global	vONEShotTimerFunc2
+ 1577              		.syntax unified
+ 1578              		.thumb
+ 1579              		.thumb_func
+ 1581              	vONEShotTimerFunc2:
+ 1582              	.LVL163:
+ 1583              	.LFB78:
+ 226:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[1],0);
+ 1584              		.loc 1 226 1 view -0
+ 1585              		.cfi_startproc
+ 1586              		@ args = 0, pretend = 0, frame = 0
+ 1587              		@ frame_needed = 0, uses_anonymous_args = 0
+ 226:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[1],0);
+ 1588              		.loc 1 226 1 is_stmt 0 view .LVU317
+ 1589 0000 08B5     		push	{r3, lr}
+ 1590              	.LCFI10:
+ 1591              		.cfi_def_cfa_offset 8
+ 1592              		.cfi_offset 3, -8
+ 1593              		.cfi_offset 14, -4
+ 227:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1594              		.loc 1 227 2 is_stmt 1 view .LVU318
+ 227:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1595              		.loc 1 227 23 is_stmt 0 view .LVU319
+ 1596 0002 0022     		movs	r2, #0
+ 1597 0004 1146     		mov	r1, r2
+ 1598 0006 0C4B     		ldr	r3, .L121
+ 1599 0008 5868     		ldr	r0, [r3, #4]
+ 1600              	.LVL164:
+ 227:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1601              		.loc 1 227 23 view .LVU320
+ 1602 000a FFF7FEFF 		bl	xQueueReceiveFromISR
+ 1603              	.LVL165:
+ 228:BSP/motor.c   **** 	{
+ 1604              		.loc 1 228 2 is_stmt 1 view .LVU321
+ 228:BSP/motor.c   **** 	{
+ 1605              		.loc 1 228 4 is_stmt 0 view .LVU322
+ 1606 000e 0128     		cmp	r0, #1
+ 1607 0010 03D0     		beq	.L120
+ 235:BSP/motor.c   **** 	}
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 39
+
+
+ 1608              		.loc 1 235 3 is_stmt 1 view .LVU323
+ 1609 0012 0A48     		ldr	r0, .L121+4
+ 1610              	.LVL166:
+ 235:BSP/motor.c   **** 	}
+ 1611              		.loc 1 235 3 is_stmt 0 view .LVU324
+ 1612 0014 FFF7FEFF 		bl	UartPrintf
+ 1613              	.LVL167:
+ 1614              	.L116:
+ 237:BSP/motor.c   **** void vONEShotTimerFunc3( TimerHandle_t xTimer ) //第三级传送带
+ 1615              		.loc 1 237 1 view .LVU325
+ 1616 0018 08BD     		pop	{r3, pc}
+ 1617              	.LVL168:
+ 1618              	.L120:
+ 230:BSP/motor.c   **** 		PID_setMotorPoint(&motor2,fabs(motor2.TPID.setpoint));
+ 1619              		.loc 1 230 3 is_stmt 1 view .LVU326
+ 1620 001a 0220     		movs	r0, #2
+ 1621              	.LVL169:
+ 230:BSP/motor.c   **** 		PID_setMotorPoint(&motor2,fabs(motor2.TPID.setpoint));
+ 1622              		.loc 1 230 3 is_stmt 0 view .LVU327
+ 1623 001c FFF7FEFF 		bl	Motor_start
+ 1624              	.LVL170:
+ 231:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[1],NULL);
+ 1625              		.loc 1 231 3 is_stmt 1 view .LVU328
+ 231:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[1],NULL);
+ 1626              		.loc 1 231 45 is_stmt 0 view .LVU329
+ 1627 0020 0748     		ldr	r0, .L121+8
+ 1628 0022 016A     		ldr	r1, [r0, #32]	@ float
+ 231:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[1],NULL);
+ 1629              		.loc 1 231 3 view .LVU330
+ 1630 0024 21F00041 		bic	r1, r1, #-2147483648
+ 1631 0028 FFF7FEFF 		bl	PID_setMotorPoint
+ 1632              	.LVL171:
+ 232:BSP/motor.c   **** 	}
+ 1633              		.loc 1 232 3 is_stmt 1 view .LVU331
+ 1634 002c 0021     		movs	r1, #0
+ 1635 002e 024B     		ldr	r3, .L121
+ 1636 0030 5868     		ldr	r0, [r3, #4]
+ 1637 0032 FFF7FEFF 		bl	xQueueGiveFromISR
+ 1638              	.LVL172:
+ 1639 0036 EFE7     		b	.L116
+ 1640              	.L122:
+ 1641              		.align	2
+ 1642              	.L121:
+ 1643 0038 00000000 		.word	.LANCHOR10
+ 1644 003c 00000000 		.word	.LC5
+ 1645 0040 00000000 		.word	.LANCHOR2
+ 1646              		.cfi_endproc
+ 1647              	.LFE78:
+ 1649              		.section	.rodata.vONEShotTimerFunc3.str1.4,"aMS",%progbits,1
+ 1650              		.align	2
+ 1651              	.LC6:
+ 1652 0000 47657420 		.ascii	"Get semaphore failed3\000"
+ 1652      73656D61 
+ 1652      70686F72 
+ 1652      65206661 
+ 1652      696C6564 
+ 1653              		.section	.text.vONEShotTimerFunc3,"ax",%progbits
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 40
+
+
+ 1654              		.align	1
+ 1655              		.global	vONEShotTimerFunc3
+ 1656              		.syntax unified
+ 1657              		.thumb
+ 1658              		.thumb_func
+ 1660              	vONEShotTimerFunc3:
+ 1661              	.LVL173:
+ 1662              	.LFB79:
+ 239:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[2],0);
+ 1663              		.loc 1 239 1 view -0
+ 1664              		.cfi_startproc
+ 1665              		@ args = 0, pretend = 0, frame = 0
+ 1666              		@ frame_needed = 0, uses_anonymous_args = 0
+ 239:BSP/motor.c   **** 	BaseType_t xReturn = xSemaphoreTakeFromISR(xMotorSemaphore[2],0);
+ 1667              		.loc 1 239 1 is_stmt 0 view .LVU333
+ 1668 0000 08B5     		push	{r3, lr}
+ 1669              	.LCFI11:
+ 1670              		.cfi_def_cfa_offset 8
+ 1671              		.cfi_offset 3, -8
+ 1672              		.cfi_offset 14, -4
+ 240:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1673              		.loc 1 240 2 is_stmt 1 view .LVU334
+ 240:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1674              		.loc 1 240 23 is_stmt 0 view .LVU335
+ 1675 0002 0022     		movs	r2, #0
+ 1676 0004 1146     		mov	r1, r2
+ 1677 0006 0C4B     		ldr	r3, .L128
+ 1678 0008 9868     		ldr	r0, [r3, #8]
+ 1679              	.LVL174:
+ 240:BSP/motor.c   **** 	if(xReturn == pdTRUE)
+ 1680              		.loc 1 240 23 view .LVU336
+ 1681 000a FFF7FEFF 		bl	xQueueReceiveFromISR
+ 1682              	.LVL175:
+ 241:BSP/motor.c   **** 	{
+ 1683              		.loc 1 241 2 is_stmt 1 view .LVU337
+ 241:BSP/motor.c   **** 	{
+ 1684              		.loc 1 241 4 is_stmt 0 view .LVU338
+ 1685 000e 0128     		cmp	r0, #1
+ 1686 0010 03D0     		beq	.L127
+ 248:BSP/motor.c   **** 	}
+ 1687              		.loc 1 248 3 is_stmt 1 view .LVU339
+ 1688 0012 0A48     		ldr	r0, .L128+4
+ 1689              	.LVL176:
+ 248:BSP/motor.c   **** 	}
+ 1690              		.loc 1 248 3 is_stmt 0 view .LVU340
+ 1691 0014 FFF7FEFF 		bl	UartPrintf
+ 1692              	.LVL177:
+ 1693              	.L123:
+ 250:BSP/motor.c   **** void KeyTimerFunc( TimerHandle_t xTimer )
+ 1694              		.loc 1 250 1 view .LVU341
+ 1695 0018 08BD     		pop	{r3, pc}
+ 1696              	.LVL178:
+ 1697              	.L127:
+ 243:BSP/motor.c   **** 		PID_setMotorPoint(&motor3,fabs(motor3.TPID.setpoint));
+ 1698              		.loc 1 243 3 is_stmt 1 view .LVU342
+ 1699 001a 0320     		movs	r0, #3
+ 1700              	.LVL179:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 41
+
+
+ 243:BSP/motor.c   **** 		PID_setMotorPoint(&motor3,fabs(motor3.TPID.setpoint));
+ 1701              		.loc 1 243 3 is_stmt 0 view .LVU343
+ 1702 001c FFF7FEFF 		bl	Motor_start
+ 1703              	.LVL180:
+ 244:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[2],NULL);
+ 1704              		.loc 1 244 3 is_stmt 1 view .LVU344
+ 244:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[2],NULL);
+ 1705              		.loc 1 244 45 is_stmt 0 view .LVU345
+ 1706 0020 0748     		ldr	r0, .L128+8
+ 1707 0022 016A     		ldr	r1, [r0, #32]	@ float
+ 244:BSP/motor.c   **** 		xSemaphoreGiveFromISR(xMotorSemaphore[2],NULL);
+ 1708              		.loc 1 244 3 view .LVU346
+ 1709 0024 21F00041 		bic	r1, r1, #-2147483648
+ 1710 0028 FFF7FEFF 		bl	PID_setMotorPoint
+ 1711              	.LVL181:
+ 245:BSP/motor.c   **** 	}
+ 1712              		.loc 1 245 3 is_stmt 1 view .LVU347
+ 1713 002c 0021     		movs	r1, #0
+ 1714 002e 024B     		ldr	r3, .L128
+ 1715 0030 9868     		ldr	r0, [r3, #8]
+ 1716 0032 FFF7FEFF 		bl	xQueueGiveFromISR
+ 1717              	.LVL182:
+ 1718 0036 EFE7     		b	.L123
+ 1719              	.L129:
+ 1720              		.align	2
+ 1721              	.L128:
+ 1722 0038 00000000 		.word	.LANCHOR10
+ 1723 003c 00000000 		.word	.LC6
+ 1724 0040 00000000 		.word	.LANCHOR3
+ 1725              		.cfi_endproc
+ 1726              	.LFE79:
+ 1728              		.section	.text.HAL_GPIO_EXTI_Callback,"ax",%progbits
+ 1729              		.align	1
+ 1730              		.global	HAL_GPIO_EXTI_Callback
+ 1731              		.syntax unified
+ 1732              		.thumb
+ 1733              		.thumb_func
+ 1735              	HAL_GPIO_EXTI_Callback:
+ 1736              	.LVL183:
+ 1737              	.LFB84:
+ 352:BSP/motor.c   **** 
+ 353:BSP/motor.c   **** 
+ 354:BSP/motor.c   **** void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+ 355:BSP/motor.c   **** {
+ 1738              		.loc 1 355 1 view -0
+ 1739              		.cfi_startproc
+ 1740              		@ args = 0, pretend = 0, frame = 0
+ 1741              		@ frame_needed = 0, uses_anonymous_args = 0
+ 1742              		.loc 1 355 1 is_stmt 0 view .LVU349
+ 1743 0000 08B5     		push	{r3, lr}
+ 1744              	.LCFI12:
+ 1745              		.cfi_def_cfa_offset 8
+ 1746              		.cfi_offset 3, -8
+ 1747              		.cfi_offset 14, -4
+ 356:BSP/motor.c   **** 	if(GPIO_Pin == MOTOR1_ENCODEA_EXTI_PIN)
+ 1748              		.loc 1 356 2 is_stmt 1 view .LVU350
+ 1749              		.loc 1 356 4 is_stmt 0 view .LVU351
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 42
+
+
+ 1750 0002 B0F5006F 		cmp	r0, #2048
+ 1751 0006 09D0     		beq	.L140
+ 357:BSP/motor.c   **** 	{
+ 358:BSP/motor.c   **** 		if(HAL_GPIO_ReadPin(MOTOR1_ENCODEB_PORT,MOTOR1_ENCODEB_PIN) == GPIO_PIN_SET)
+ 359:BSP/motor.c   **** 		{
+ 360:BSP/motor.c   **** 			motor1.timers++;
+ 361:BSP/motor.c   **** 			motor1.state = true;
+ 362:BSP/motor.c   **** 		}
+ 363:BSP/motor.c   **** 		else
+ 364:BSP/motor.c   **** 		{
+ 365:BSP/motor.c   **** 			motor1.timers--;
+ 366:BSP/motor.c   **** 			motor1.state = false;
+ 367:BSP/motor.c   **** 		}
+ 368:BSP/motor.c   **** 	}
+ 369:BSP/motor.c   **** 	else if(GPIO_Pin == MOTOR2_ENCODEA_EXTI_PIN)
+ 1752              		.loc 1 369 7 is_stmt 1 view .LVU352
+ 1753              		.loc 1 369 9 is_stmt 0 view .LVU353
+ 1754 0008 B0F5805F 		cmp	r0, #4096
+ 1755 000c 1BD0     		beq	.L141
+ 370:BSP/motor.c   **** 	{
+ 371:BSP/motor.c   **** 
+ 372:BSP/motor.c   ****         if(HAL_GPIO_ReadPin(MOTOR2_ENCODEB_PORT, MOTOR2_ENCODEB_PIN) == GPIO_PIN_SET)
+ 373:BSP/motor.c   ****         {
+ 374:BSP/motor.c   **** 			motor2.timers++;
+ 375:BSP/motor.c   ****             motor2.state = true;
+ 376:BSP/motor.c   ****         }
+ 377:BSP/motor.c   ****         else
+ 378:BSP/motor.c   ****         {
+ 379:BSP/motor.c   **** 			motor2.timers--;
+ 380:BSP/motor.c   ****             motor2.state = false;
+ 381:BSP/motor.c   ****         }
+ 382:BSP/motor.c   **** 	}
+ 383:BSP/motor.c   **** 	else if(GPIO_Pin == MOTOR3_ENCODEA_EXTI_PIN)
+ 1756              		.loc 1 383 7 is_stmt 1 view .LVU354
+ 1757              		.loc 1 383 9 is_stmt 0 view .LVU355
+ 1758 000e B0F5004F 		cmp	r0, #32768
+ 1759 0012 2DD0     		beq	.L142
+ 384:BSP/motor.c   **** 	{
+ 385:BSP/motor.c   **** 
+ 386:BSP/motor.c   ****         if(HAL_GPIO_ReadPin(MOTOR3_ENCODEB_PORT, MOTOR3_ENCODEB_PIN) == GPIO_PIN_SET)
+ 387:BSP/motor.c   ****         {
+ 388:BSP/motor.c   **** 			motor3.timers--;
+ 389:BSP/motor.c   ****             motor3.state = false;
+ 390:BSP/motor.c   ****         }
+ 391:BSP/motor.c   ****         else
+ 392:BSP/motor.c   ****         {
+ 393:BSP/motor.c   **** 			motor3.timers++;
+ 394:BSP/motor.c   ****             motor3.state = true;
+ 395:BSP/motor.c   ****         }
+ 396:BSP/motor.c   **** 	}
+ 397:BSP/motor.c   **** 	else if(GPIO_Pin == MOTOR4_ENCODEA_EXTI_PIN)
+ 1760              		.loc 1 397 7 is_stmt 1 view .LVU356
+ 1761              		.loc 1 397 9 is_stmt 0 view .LVU357
+ 1762 0014 B0F5807F 		cmp	r0, #256
+ 1763 0018 3FD0     		beq	.L143
+ 1764              	.LVL184:
+ 1765              	.L130:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 43
+
+
+ 398:BSP/motor.c   **** 	{
+ 399:BSP/motor.c   ****         if(HAL_GPIO_ReadPin(MOTOR4_ENCODEB_PORT, MOTOR4_ENCODEB_PIN) == GPIO_PIN_SET)
+ 400:BSP/motor.c   ****         {
+ 401:BSP/motor.c   **** 			motor4.timers--;
+ 402:BSP/motor.c   ****             motor4.state = true;
+ 403:BSP/motor.c   ****         }
+ 404:BSP/motor.c   ****         else
+ 405:BSP/motor.c   ****         {
+ 406:BSP/motor.c   **** 			motor4.timers++;
+ 407:BSP/motor.c   ****             motor4.state = false;
+ 408:BSP/motor.c   ****         }
+ 409:BSP/motor.c   **** 	}
+ 410:BSP/motor.c   **** }
+ 1766              		.loc 1 410 1 view .LVU358
+ 1767 001a 08BD     		pop	{r3, pc}
+ 1768              	.LVL185:
+ 1769              	.L140:
+ 358:BSP/motor.c   **** 		{
+ 1770              		.loc 1 358 3 is_stmt 1 view .LVU359
+ 358:BSP/motor.c   **** 		{
+ 1771              		.loc 1 358 6 is_stmt 0 view .LVU360
+ 1772 001c 4FF48061 		mov	r1, #1024
+ 1773 0020 2848     		ldr	r0, .L148
+ 1774              	.LVL186:
+ 358:BSP/motor.c   **** 		{
+ 1775              		.loc 1 358 6 view .LVU361
+ 1776 0022 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 1777              	.LVL187:
+ 358:BSP/motor.c   **** 		{
+ 1778              		.loc 1 358 5 view .LVU362
+ 1779 0026 0128     		cmp	r0, #1
+ 1780 0028 06D0     		beq	.L144
+ 365:BSP/motor.c   **** 			motor1.state = false;
+ 1781              		.loc 1 365 4 is_stmt 1 view .LVU363
+ 365:BSP/motor.c   **** 			motor1.state = false;
+ 1782              		.loc 1 365 10 is_stmt 0 view .LVU364
+ 1783 002a 274B     		ldr	r3, .L148+4
+ 1784 002c 1A68     		ldr	r2, [r3]
+ 365:BSP/motor.c   **** 			motor1.state = false;
+ 1785              		.loc 1 365 17 view .LVU365
+ 1786 002e 013A     		subs	r2, r2, #1
+ 1787 0030 1A60     		str	r2, [r3]
+ 366:BSP/motor.c   **** 		}
+ 1788              		.loc 1 366 4 is_stmt 1 view .LVU366
+ 366:BSP/motor.c   **** 		}
+ 1789              		.loc 1 366 17 is_stmt 0 view .LVU367
+ 1790 0032 0022     		movs	r2, #0
+ 1791 0034 1A74     		strb	r2, [r3, #16]
+ 1792 0036 F0E7     		b	.L130
+ 1793              	.L144:
+ 360:BSP/motor.c   **** 			motor1.state = true;
+ 1794              		.loc 1 360 4 is_stmt 1 view .LVU368
+ 360:BSP/motor.c   **** 			motor1.state = true;
+ 1795              		.loc 1 360 10 is_stmt 0 view .LVU369
+ 1796 0038 234B     		ldr	r3, .L148+4
+ 1797 003a 1A68     		ldr	r2, [r3]
+ 360:BSP/motor.c   **** 			motor1.state = true;
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 44
+
+
+ 1798              		.loc 1 360 17 view .LVU370
+ 1799 003c 0132     		adds	r2, r2, #1
+ 1800 003e 1A60     		str	r2, [r3]
+ 361:BSP/motor.c   **** 		}
+ 1801              		.loc 1 361 4 is_stmt 1 view .LVU371
+ 361:BSP/motor.c   **** 		}
+ 1802              		.loc 1 361 17 is_stmt 0 view .LVU372
+ 1803 0040 0122     		movs	r2, #1
+ 1804 0042 1A74     		strb	r2, [r3, #16]
+ 1805 0044 E9E7     		b	.L130
+ 1806              	.LVL188:
+ 1807              	.L141:
+ 372:BSP/motor.c   ****         {
+ 1808              		.loc 1 372 9 is_stmt 1 view .LVU373
+ 372:BSP/motor.c   ****         {
+ 1809              		.loc 1 372 12 is_stmt 0 view .LVU374
+ 1810 0046 4FF40051 		mov	r1, #8192
+ 1811 004a 1E48     		ldr	r0, .L148
+ 1812              	.LVL189:
+ 372:BSP/motor.c   ****         {
+ 1813              		.loc 1 372 12 view .LVU375
+ 1814 004c FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 1815              	.LVL190:
+ 372:BSP/motor.c   ****         {
+ 1816              		.loc 1 372 11 view .LVU376
+ 1817 0050 0128     		cmp	r0, #1
+ 1818 0052 06D0     		beq	.L145
+ 379:BSP/motor.c   ****             motor2.state = false;
+ 1819              		.loc 1 379 4 is_stmt 1 view .LVU377
+ 379:BSP/motor.c   ****             motor2.state = false;
+ 1820              		.loc 1 379 10 is_stmt 0 view .LVU378
+ 1821 0054 1D4B     		ldr	r3, .L148+8
+ 1822 0056 1A68     		ldr	r2, [r3]
+ 379:BSP/motor.c   ****             motor2.state = false;
+ 1823              		.loc 1 379 17 view .LVU379
+ 1824 0058 013A     		subs	r2, r2, #1
+ 1825 005a 1A60     		str	r2, [r3]
+ 380:BSP/motor.c   ****         }
+ 1826              		.loc 1 380 13 is_stmt 1 view .LVU380
+ 380:BSP/motor.c   ****         }
+ 1827              		.loc 1 380 26 is_stmt 0 view .LVU381
+ 1828 005c 0022     		movs	r2, #0
+ 1829 005e 1A74     		strb	r2, [r3, #16]
+ 1830 0060 DBE7     		b	.L130
+ 1831              	.L145:
+ 374:BSP/motor.c   ****             motor2.state = true;
+ 1832              		.loc 1 374 4 is_stmt 1 view .LVU382
+ 374:BSP/motor.c   ****             motor2.state = true;
+ 1833              		.loc 1 374 10 is_stmt 0 view .LVU383
+ 1834 0062 1A4B     		ldr	r3, .L148+8
+ 1835 0064 1A68     		ldr	r2, [r3]
+ 374:BSP/motor.c   ****             motor2.state = true;
+ 1836              		.loc 1 374 17 view .LVU384
+ 1837 0066 0132     		adds	r2, r2, #1
+ 1838 0068 1A60     		str	r2, [r3]
+ 375:BSP/motor.c   ****         }
+ 1839              		.loc 1 375 13 is_stmt 1 view .LVU385
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 45
+
+
+ 375:BSP/motor.c   ****         }
+ 1840              		.loc 1 375 26 is_stmt 0 view .LVU386
+ 1841 006a 0122     		movs	r2, #1
+ 1842 006c 1A74     		strb	r2, [r3, #16]
+ 1843 006e D4E7     		b	.L130
+ 1844              	.LVL191:
+ 1845              	.L142:
+ 386:BSP/motor.c   ****         {
+ 1846              		.loc 1 386 9 is_stmt 1 view .LVU387
+ 386:BSP/motor.c   ****         {
+ 1847              		.loc 1 386 12 is_stmt 0 view .LVU388
+ 1848 0070 4FF48041 		mov	r1, #16384
+ 1849 0074 1348     		ldr	r0, .L148
+ 1850              	.LVL192:
+ 386:BSP/motor.c   ****         {
+ 1851              		.loc 1 386 12 view .LVU389
+ 1852 0076 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 1853              	.LVL193:
+ 386:BSP/motor.c   ****         {
+ 1854              		.loc 1 386 11 view .LVU390
+ 1855 007a 0128     		cmp	r0, #1
+ 1856 007c 06D0     		beq	.L146
+ 393:BSP/motor.c   ****             motor3.state = true;
+ 1857              		.loc 1 393 4 is_stmt 1 view .LVU391
+ 393:BSP/motor.c   ****             motor3.state = true;
+ 1858              		.loc 1 393 10 is_stmt 0 view .LVU392
+ 1859 007e 144B     		ldr	r3, .L148+12
+ 1860 0080 1A68     		ldr	r2, [r3]
+ 393:BSP/motor.c   ****             motor3.state = true;
+ 1861              		.loc 1 393 17 view .LVU393
+ 1862 0082 0132     		adds	r2, r2, #1
+ 1863 0084 1A60     		str	r2, [r3]
+ 394:BSP/motor.c   ****         }
+ 1864              		.loc 1 394 13 is_stmt 1 view .LVU394
+ 394:BSP/motor.c   ****         }
+ 1865              		.loc 1 394 26 is_stmt 0 view .LVU395
+ 1866 0086 0122     		movs	r2, #1
+ 1867 0088 1A74     		strb	r2, [r3, #16]
+ 1868 008a C6E7     		b	.L130
+ 1869              	.L146:
+ 388:BSP/motor.c   ****             motor3.state = false;
+ 1870              		.loc 1 388 4 is_stmt 1 view .LVU396
+ 388:BSP/motor.c   ****             motor3.state = false;
+ 1871              		.loc 1 388 10 is_stmt 0 view .LVU397
+ 1872 008c 104B     		ldr	r3, .L148+12
+ 1873 008e 1A68     		ldr	r2, [r3]
+ 388:BSP/motor.c   ****             motor3.state = false;
+ 1874              		.loc 1 388 17 view .LVU398
+ 1875 0090 013A     		subs	r2, r2, #1
+ 1876 0092 1A60     		str	r2, [r3]
+ 389:BSP/motor.c   ****         }
+ 1877              		.loc 1 389 13 is_stmt 1 view .LVU399
+ 389:BSP/motor.c   ****         }
+ 1878              		.loc 1 389 26 is_stmt 0 view .LVU400
+ 1879 0094 0022     		movs	r2, #0
+ 1880 0096 1A74     		strb	r2, [r3, #16]
+ 1881 0098 BFE7     		b	.L130
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 46
+
+
+ 1882              	.LVL194:
+ 1883              	.L143:
+ 399:BSP/motor.c   ****         {
+ 1884              		.loc 1 399 9 is_stmt 1 view .LVU401
+ 399:BSP/motor.c   ****         {
+ 1885              		.loc 1 399 12 is_stmt 0 view .LVU402
+ 1886 009a 4FF40061 		mov	r1, #2048
+ 1887 009e 0D48     		ldr	r0, .L148+16
+ 1888              	.LVL195:
+ 399:BSP/motor.c   ****         {
+ 1889              		.loc 1 399 12 view .LVU403
+ 1890 00a0 FFF7FEFF 		bl	HAL_GPIO_ReadPin
+ 1891              	.LVL196:
+ 399:BSP/motor.c   ****         {
+ 1892              		.loc 1 399 11 view .LVU404
+ 1893 00a4 0128     		cmp	r0, #1
+ 1894 00a6 06D0     		beq	.L147
+ 406:BSP/motor.c   ****             motor4.state = false;
+ 1895              		.loc 1 406 4 is_stmt 1 view .LVU405
+ 406:BSP/motor.c   ****             motor4.state = false;
+ 1896              		.loc 1 406 10 is_stmt 0 view .LVU406
+ 1897 00a8 0B4B     		ldr	r3, .L148+20
+ 1898 00aa 1A68     		ldr	r2, [r3]
+ 406:BSP/motor.c   ****             motor4.state = false;
+ 1899              		.loc 1 406 17 view .LVU407
+ 1900 00ac 0132     		adds	r2, r2, #1
+ 1901 00ae 1A60     		str	r2, [r3]
+ 407:BSP/motor.c   ****         }
+ 1902              		.loc 1 407 13 is_stmt 1 view .LVU408
+ 407:BSP/motor.c   ****         }
+ 1903              		.loc 1 407 26 is_stmt 0 view .LVU409
+ 1904 00b0 0022     		movs	r2, #0
+ 1905 00b2 1A74     		strb	r2, [r3, #16]
+ 1906              		.loc 1 410 1 view .LVU410
+ 1907 00b4 B1E7     		b	.L130
+ 1908              	.L147:
+ 401:BSP/motor.c   ****             motor4.state = true;
+ 1909              		.loc 1 401 4 is_stmt 1 view .LVU411
+ 401:BSP/motor.c   ****             motor4.state = true;
+ 1910              		.loc 1 401 10 is_stmt 0 view .LVU412
+ 1911 00b6 084B     		ldr	r3, .L148+20
+ 1912 00b8 1A68     		ldr	r2, [r3]
+ 401:BSP/motor.c   ****             motor4.state = true;
+ 1913              		.loc 1 401 17 view .LVU413
+ 1914 00ba 013A     		subs	r2, r2, #1
+ 1915 00bc 1A60     		str	r2, [r3]
+ 402:BSP/motor.c   ****         }
+ 1916              		.loc 1 402 13 is_stmt 1 view .LVU414
+ 402:BSP/motor.c   ****         }
+ 1917              		.loc 1 402 26 is_stmt 0 view .LVU415
+ 1918 00be 0122     		movs	r2, #1
+ 1919 00c0 1A74     		strb	r2, [r3, #16]
+ 1920 00c2 AAE7     		b	.L130
+ 1921              	.L149:
+ 1922              		.align	2
+ 1923              	.L148:
+ 1924 00c4 000C0140 		.word	1073810432
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 47
+
+
+ 1925 00c8 00000000 		.word	.LANCHOR4
+ 1926 00cc 00000000 		.word	.LANCHOR2
+ 1927 00d0 00000000 		.word	.LANCHOR3
+ 1928 00d4 00080140 		.word	1073809408
+ 1929 00d8 00000000 		.word	.LANCHOR11
+ 1930              		.cfi_endproc
+ 1931              	.LFE84:
+ 1933              		.global	xtimer
+ 1934              		.global	motor4
+ 1935              		.global	motor3
+ 1936              		.global	motor2
+ 1937              		.global	motor1
+ 1938              		.global	key
+ 1939              		.global	SpeedGetHandle
+ 1940              		.global	KeyTimerHandle
+ 1941              		.global	xOneShotTimer3
+ 1942              		.global	xOneShotTimer2
+ 1943              		.global	xOneShotTimer1
+ 1944              		.global	xMotorSemaphore
+ 1945              		.global	MotorHandle
+ 1946              		.section	.bss.KeyTimerHandle,"aw",%nobits
+ 1947              		.align	2
+ 1948              		.set	.LANCHOR7,. + 0
+ 1951              	KeyTimerHandle:
+ 1952 0000 00000000 		.space	4
+ 1953              		.section	.bss.MotorHandle,"aw",%nobits
+ 1954              		.align	2
+ 1957              	MotorHandle:
+ 1958 0000 00000000 		.space	4
+ 1959              		.section	.bss.SpeedGetHandle,"aw",%nobits
+ 1960              		.align	2
+ 1961              		.set	.LANCHOR6,. + 0
+ 1964              	SpeedGetHandle:
+ 1965 0000 00000000 		.space	4
+ 1966              		.section	.bss.key,"aw",%nobits
+ 1967              		.align	2
+ 1968              		.set	.LANCHOR0,. + 0
+ 1971              	key:
+ 1972 0000 00000000 		.space	9
+ 1972      00000000 
+ 1972      00
+ 1973              		.section	.bss.motor1,"aw",%nobits
+ 1974              		.align	2
+ 1975              		.set	.LANCHOR4,. + 0
+ 1978              	motor1:
+ 1979 0000 00000000 		.space	68
+ 1979      00000000 
+ 1979      00000000 
+ 1979      00000000 
+ 1979      00000000 
+ 1980              		.section	.bss.motor2,"aw",%nobits
+ 1981              		.align	2
+ 1982              		.set	.LANCHOR2,. + 0
+ 1985              	motor2:
+ 1986 0000 00000000 		.space	68
+ 1986      00000000 
+ 1986      00000000 
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 48
+
+
+ 1986      00000000 
+ 1986      00000000 
+ 1987              		.section	.bss.motor3,"aw",%nobits
+ 1988              		.align	2
+ 1989              		.set	.LANCHOR3,. + 0
+ 1992              	motor3:
+ 1993 0000 00000000 		.space	68
+ 1993      00000000 
+ 1993      00000000 
+ 1993      00000000 
+ 1993      00000000 
+ 1994              		.section	.bss.motor4,"aw",%nobits
+ 1995              		.align	2
+ 1996              		.set	.LANCHOR11,. + 0
+ 1999              	motor4:
+ 2000 0000 00000000 		.space	68
+ 2000      00000000 
+ 2000      00000000 
+ 2000      00000000 
+ 2000      00000000 
+ 2001              		.section	.bss.xMotorSemaphore,"aw",%nobits
+ 2002              		.align	2
+ 2003              		.set	.LANCHOR10,. + 0
+ 2006              	xMotorSemaphore:
+ 2007 0000 00000000 		.space	12
+ 2007      00000000 
+ 2007      00000000 
+ 2008              		.section	.bss.xOneShotTimer1,"aw",%nobits
+ 2009              		.align	2
+ 2010              		.set	.LANCHOR5,. + 0
+ 2013              	xOneShotTimer1:
+ 2014 0000 00000000 		.space	4
+ 2015              		.section	.bss.xOneShotTimer2,"aw",%nobits
+ 2016              		.align	2
+ 2017              		.set	.LANCHOR8,. + 0
+ 2020              	xOneShotTimer2:
+ 2021 0000 00000000 		.space	4
+ 2022              		.section	.bss.xOneShotTimer3,"aw",%nobits
+ 2023              		.align	2
+ 2024              		.set	.LANCHOR9,. + 0
+ 2027              	xOneShotTimer3:
+ 2028 0000 00000000 		.space	4
+ 2029              		.section	.bss.xtimer,"aw",%nobits
+ 2030              		.set	.LANCHOR1,. + 0
+ 2033              	xtimer:
+ 2034 0000 00       		.space	1
+ 2035              		.text
+ 2036              	.Letext0:
+ 2037              		.file 2 "d:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.10\\arm-none-eabi\\include\\
+ 2038              		.file 3 "d:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.10\\arm-none-eabi\\include\\
+ 2039              		.file 4 "Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM3/portmacro.h"
+ 2040              		.file 5 "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+ 2041              		.file 6 "Drivers/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h"
+ 2042              		.file 7 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_def.h"
+ 2043              		.file 8 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_gpio.h"
+ 2044              		.file 9 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_dma.h"
+ 2045              		.file 10 "Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_tim.h"
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 49
+
+
+ 2046              		.file 11 "Middlewares/Third_Party/FreeRTOS/Source/include/queue.h"
+ 2047              		.file 12 "Middlewares/Third_Party/FreeRTOS/Source/include/semphr.h"
+ 2048              		.file 13 "Middlewares/Third_Party/FreeRTOS/Source/include/timers.h"
+ 2049              		.file 14 "BSP/pid.h"
+ 2050              		.file 15 "BSP/motor.h"
+ 2051              		.file 16 "Core/Inc/tim.h"
+ 2052              		.file 17 "BSP/uart.h"
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 50
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 motor.c
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:20     .text.Motor_SetSpeed:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:26     .text.Motor_SetSpeed:00000000 Motor_SetSpeed
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:68     .text.Motor_SetSpeed:00000024 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:72     .text.Motor_SetSpeed:00000028 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:259    .text.Motor_SetSpeed:0000014c $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:266    .text.Motor_Config:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:272    .text.Motor_Config:00000000 Motor_Config
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:320    .text.Motor_Config:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:325    .text.Motor_stop:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:331    .text.Motor_stop:00000000 Motor_stop
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:352    .text.Motor_stop:0000000c $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:356    .text.Motor_stop:00000010 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:395    .text.Motor_stop:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:400    .text.Motor_start:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:406    .text.Motor_start:00000000 Motor_start
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:427    .text.Motor_start:0000000c $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:431    .text.Motor_start:00000010 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:470    .text.Motor_start:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:475    .text.KeyTimerFunc:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:481    .text.KeyTimerFunc:00000000 KeyTimerFunc
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:631    .text.KeyTimerFunc:000000a4 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:641    .text.SpeedSetTimerFun:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:647    .text.SpeedSetTimerFun:00000000 SpeedSetTimerFun
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:838    .text.SpeedSetTimerFun:000000f0 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:846    .text.Motor_SetCompSpeed:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:852    .text.Motor_SetCompSpeed:00000000 Motor_SetCompSpeed
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:870    .text.PID_setMotorPoint:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:876    .text.PID_setMotorPoint:00000000 PID_setMotorPoint
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:929    .rodata.Motor_Task.str1.4:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:944    .text.Motor_Task:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:950    .text.Motor_Task:00000000 Motor_Task
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1352   .text.Motor_Task:000002bc $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1370   .text.Motor_Task:000002fc $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1486   .text.Motor_Task:000003a0 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1495   .rodata.vONEShotTimerFunc1.str1.4:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1499   .text.vONEShotTimerFunc1:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1505   .text.vONEShotTimerFunc1:00000000 vONEShotTimerFunc1
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1564   .text.vONEShotTimerFunc1:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1571   .rodata.vONEShotTimerFunc2.str1.4:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1575   .text.vONEShotTimerFunc2:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1581   .text.vONEShotTimerFunc2:00000000 vONEShotTimerFunc2
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1643   .text.vONEShotTimerFunc2:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1650   .rodata.vONEShotTimerFunc3.str1.4:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1654   .text.vONEShotTimerFunc3:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1660   .text.vONEShotTimerFunc3:00000000 vONEShotTimerFunc3
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1722   .text.vONEShotTimerFunc3:00000038 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1729   .text.HAL_GPIO_EXTI_Callback:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1735   .text.HAL_GPIO_EXTI_Callback:00000000 HAL_GPIO_EXTI_Callback
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1924   .text.HAL_GPIO_EXTI_Callback:000000c4 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2033   .bss.xtimer:00000000 xtimer
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1999   .bss.motor4:00000000 motor4
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1992   .bss.motor3:00000000 motor3
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1985   .bss.motor2:00000000 motor2
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1978   .bss.motor1:00000000 motor1
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1971   .bss.key:00000000 key
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s 			page 51
+
+
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1964   .bss.SpeedGetHandle:00000000 SpeedGetHandle
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1951   .bss.KeyTimerHandle:00000000 KeyTimerHandle
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2027   .bss.xOneShotTimer3:00000000 xOneShotTimer3
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2020   .bss.xOneShotTimer2:00000000 xOneShotTimer2
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2013   .bss.xOneShotTimer1:00000000 xOneShotTimer1
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2006   .bss.xMotorSemaphore:00000000 xMotorSemaphore
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1957   .bss.MotorHandle:00000000 MotorHandle
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1947   .bss.KeyTimerHandle:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1954   .bss.MotorHandle:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1960   .bss.SpeedGetHandle:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1967   .bss.key:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1974   .bss.motor1:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1981   .bss.motor2:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1988   .bss.motor3:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:1995   .bss.motor4:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2002   .bss.xMotorSemaphore:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2009   .bss.xOneShotTimer1:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2016   .bss.xOneShotTimer2:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2023   .bss.xOneShotTimer3:00000000 $d
+C:\Users\tre\AppData\Local\Temp\ccsF7XHe.s:2034   .bss.xtimer:00000000 $d
+
+UNDEFINED SYMBOLS
+__aeabi_f2uiz
+__aeabi_fcmpgt
+HAL_GPIO_WritePin
+htim2
+HAL_TIM_PWM_Start
+HAL_TIM_PWM_Stop
+HAL_GPIO_ReadPin
+__aeabi_i2f
+__aeabi_fcmpeq
+__aeabi_f2iz
+PID_Compute
+__aeabi_fcmplt
+__aeabi_fmul
+__aeabi_f2d
+xTimerGenericCommand
+xTaskGetTickCount
+UartPrintf
+PID_Init
+vTaskDelay
+xQueueReceiveFromISR
+xQueueGiveFromISR

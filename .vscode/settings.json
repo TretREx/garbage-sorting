@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.json": "c",
+        "tim.h": "c",
+        "task.h": "c",
+        "freertos.h": "c",
+        "cmsis_os.h": "c",
+        "uart.h": "c",
+        "servo.h": "c",
+        "main.h": "c"
+    }
+}

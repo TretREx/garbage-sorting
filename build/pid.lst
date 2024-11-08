@@ -1,0 +1,401 @@
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.arch armv7-m
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.file	"pid.c"
+  14              		.text
+  15              	.Ltext0:
+  16              		.cfi_sections	.debug_frame
+  17              		.section	.text.PID_Init,"ax",%progbits
+  18              		.align	1
+  19              		.global	PID_Init
+  20              		.syntax unified
+  21              		.thumb
+  22              		.thumb_func
+  24              	PID_Init:
+  25              	.LVL0:
+  26              	.LFB7:
+  27              		.file 1 "BSP/pid.c"
+   1:BSP/pid.c     **** ﻿#include "pid.h"
+   2:BSP/pid.c     **** #include "math.h"
+   3:BSP/pid.c     **** 
+   4:BSP/pid.c     **** // PID初始化函数
+   5:BSP/pid.c     **** void PID_Init(PID_TypeDef *pid, float Kp, float Ki, float Kd, float setpoint, float output_min, flo
+  28              		.loc 1 5 115 view -0
+  29              		.cfi_startproc
+  30              		@ args = 12, pretend = 0, frame = 0
+  31              		@ frame_needed = 0, uses_anonymous_args = 0
+  32              		.loc 1 5 115 is_stmt 0 view .LVU1
+  33 0000 10B5     		push	{r4, lr}
+  34              	.LCFI0:
+  35              		.cfi_def_cfa_offset 8
+  36              		.cfi_offset 4, -8
+  37              		.cfi_offset 14, -4
+  38 0002 0446     		mov	r4, r0
+   6:BSP/pid.c     ****     pid->Kp = Kp;
+  39              		.loc 1 6 5 is_stmt 1 view .LVU2
+  40              		.loc 1 6 13 is_stmt 0 view .LVU3
+  41 0004 0160     		str	r1, [r0]	@ float
+   7:BSP/pid.c     ****     pid->Ki = Ki;
+  42              		.loc 1 7 5 is_stmt 1 view .LVU4
+  43              		.loc 1 7 13 is_stmt 0 view .LVU5
+  44 0006 4260     		str	r2, [r0, #4]	@ float
+   8:BSP/pid.c     ****     pid->Kd = Kd;
+  45              		.loc 1 8 5 is_stmt 1 view .LVU6
+  46              		.loc 1 8 13 is_stmt 0 view .LVU7
+  47 0008 8360     		str	r3, [r0, #8]	@ float
+   9:BSP/pid.c     ****     pid->setpoint = setpoint;
+  48              		.loc 1 9 5 is_stmt 1 view .LVU8
+  49              		.loc 1 9 19 is_stmt 0 view .LVU9
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 2
+
+
+  50 000a 029B     		ldr	r3, [sp, #8]	@ float
+  51              	.LVL1:
+  52              		.loc 1 9 19 view .LVU10
+  53 000c C360     		str	r3, [r0, #12]	@ float
+  10:BSP/pid.c     ****     pid->integral = 0.0f;
+  54              		.loc 1 10 5 is_stmt 1 view .LVU11
+  55              		.loc 1 10 19 is_stmt 0 view .LVU12
+  56 000e 0023     		movs	r3, #0
+  57 0010 0361     		str	r3, [r0, #16]	@ float
+  11:BSP/pid.c     ****     pid->previous_error = 0.0f;
+  58              		.loc 1 11 5 is_stmt 1 view .LVU13
+  59              		.loc 1 11 25 is_stmt 0 view .LVU14
+  60 0012 4361     		str	r3, [r0, #20]	@ float
+  12:BSP/pid.c     ****     pid->output = 0.0f;
+  61              		.loc 1 12 5 is_stmt 1 view .LVU15
+  62              		.loc 1 12 17 is_stmt 0 view .LVU16
+  63 0014 8361     		str	r3, [r0, #24]	@ float
+  13:BSP/pid.c     ****     pid->output_min = output_min;
+  64              		.loc 1 13 5 is_stmt 1 view .LVU17
+  65              		.loc 1 13 21 is_stmt 0 view .LVU18
+  66 0016 039B     		ldr	r3, [sp, #12]	@ float
+  67 0018 C361     		str	r3, [r0, #28]	@ float
+  14:BSP/pid.c     ****     pid->output_max = output_max;
+  68              		.loc 1 14 5 is_stmt 1 view .LVU19
+  69              		.loc 1 14 21 is_stmt 0 view .LVU20
+  70 001a 049B     		ldr	r3, [sp, #16]	@ float
+  71 001c 0362     		str	r3, [r0, #32]	@ float
+  15:BSP/pid.c     ****     pid->last_time = GetTime();
+  72              		.loc 1 15 5 is_stmt 1 view .LVU21
+  73              		.loc 1 15 22 is_stmt 0 view .LVU22
+  74 001e FFF7FEFF 		bl	xTaskGetTickCount
+  75              	.LVL2:
+  76              		.loc 1 15 20 view .LVU23
+  77 0022 6062     		str	r0, [r4, #36]
+  16:BSP/pid.c     **** }
+  78              		.loc 1 16 1 view .LVU24
+  79 0024 10BD     		pop	{r4, pc}
+  80              		.loc 1 16 1 view .LVU25
+  81              		.cfi_endproc
+  82              	.LFE7:
+  84              		.global	__aeabi_ui2f
+  85              		.global	__aeabi_fcmpeq
+  86              		.global	__aeabi_fsub
+  87              		.global	__aeabi_fmul
+  88              		.global	__aeabi_fadd
+  89              		.global	__aeabi_fcmpgt
+  90              		.global	__aeabi_fcmplt
+  91              		.global	__aeabi_fdiv
+  92              		.section	.text.PID_Compute,"ax",%progbits
+  93              		.align	1
+  94              		.global	PID_Compute
+  95              		.syntax unified
+  96              		.thumb
+  97              		.thumb_func
+  99              	PID_Compute:
+ 100              	.LVL3:
+ 101              	.LFB8:
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 3
+
+
+  17:BSP/pid.c     **** 
+  18:BSP/pid.c     **** // PID计算函数
+  19:BSP/pid.c     **** float PID_Compute(PID_TypeDef *pid, float current_value) {
+ 102              		.loc 1 19 58 is_stmt 1 view -0
+ 103              		.cfi_startproc
+ 104              		@ args = 0, pretend = 0, frame = 0
+ 105              		@ frame_needed = 0, uses_anonymous_args = 0
+ 106              		.loc 1 19 58 is_stmt 0 view .LVU27
+ 107 0000 2DE9F047 		push	{r4, r5, r6, r7, r8, r9, r10, lr}
+ 108              	.LCFI1:
+ 109              		.cfi_def_cfa_offset 32
+ 110              		.cfi_offset 4, -32
+ 111              		.cfi_offset 5, -28
+ 112              		.cfi_offset 6, -24
+ 113              		.cfi_offset 7, -20
+ 114              		.cfi_offset 8, -16
+ 115              		.cfi_offset 9, -12
+ 116              		.cfi_offset 10, -8
+ 117              		.cfi_offset 14, -4
+ 118 0004 0446     		mov	r4, r0
+ 119 0006 0E46     		mov	r6, r1
+  20:BSP/pid.c     ****     TickType_t now = GetTime();
+ 120              		.loc 1 20 5 is_stmt 1 view .LVU28
+ 121              		.loc 1 20 22 is_stmt 0 view .LVU29
+ 122 0008 FFF7FEFF 		bl	xTaskGetTickCount
+ 123              	.LVL4:
+ 124              		.loc 1 20 22 view .LVU30
+ 125 000c 0546     		mov	r5, r0
+ 126              	.LVL5:
+  21:BSP/pid.c     ****     float time_change = now - pid->last_time;
+ 127              		.loc 1 21 5 is_stmt 1 view .LVU31
+ 128              		.loc 1 21 34 is_stmt 0 view .LVU32
+ 129 000e 606A     		ldr	r0, [r4, #36]
+ 130              	.LVL6:
+ 131              		.loc 1 21 11 view .LVU33
+ 132 0010 281A     		subs	r0, r5, r0
+ 133 0012 FFF7FEFF 		bl	__aeabi_ui2f
+ 134              	.LVL7:
+ 135 0016 0746     		mov	r7, r0
+ 136              	.LVL8:
+  22:BSP/pid.c     **** 
+  23:BSP/pid.c     ****     if (time_change == 0) {
+ 137              		.loc 1 23 5 is_stmt 1 view .LVU34
+ 138              		.loc 1 23 8 is_stmt 0 view .LVU35
+ 139 0018 0021     		movs	r1, #0
+ 140 001a FFF7FEFF 		bl	__aeabi_fcmpeq
+ 141              	.LVL9:
+ 142              		.loc 1 23 8 view .LVU36
+ 143 001e 0028     		cmp	r0, #0
+ 144 0020 42D1     		bne	.L24
+  24:BSP/pid.c     ****         return pid->output; // 避免时间变化为零导致除零错误
+  25:BSP/pid.c     ****     }
+  26:BSP/pid.c     ****     // 计算误差
+  27:BSP/pid.c     ****     float error = pid->setpoint - current_value;
+ 145              		.loc 1 27 5 is_stmt 1 view .LVU37
+ 146              		.loc 1 27 11 is_stmt 0 view .LVU38
+ 147 0022 3146     		mov	r1, r6
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 4
+
+
+ 148 0024 E068     		ldr	r0, [r4, #12]	@ float
+ 149 0026 FFF7FEFF 		bl	__aeabi_fsub
+ 150              	.LVL10:
+ 151 002a 0646     		mov	r6, r0
+ 152              	.LVL11:
+  28:BSP/pid.c     **** 
+  29:BSP/pid.c     ****     // 计算积分项
+  30:BSP/pid.c     ****     pid->integral += error * time_change;
+ 153              		.loc 1 30 5 is_stmt 1 view .LVU39
+ 154              		.loc 1 30 28 is_stmt 0 view .LVU40
+ 155 002c 0146     		mov	r1, r0
+ 156 002e 3846     		mov	r0, r7
+ 157              	.LVL12:
+ 158              		.loc 1 30 28 view .LVU41
+ 159 0030 FFF7FEFF 		bl	__aeabi_fmul
+ 160              	.LVL13:
+ 161              		.loc 1 30 19 view .LVU42
+ 162 0034 2169     		ldr	r1, [r4, #16]	@ float
+ 163 0036 FFF7FEFF 		bl	__aeabi_fadd
+ 164              	.LVL14:
+ 165 003a 8046     		mov	r8, r0
+ 166 003c 2061     		str	r0, [r4, #16]	@ float
+  31:BSP/pid.c     ****    if (pid->integral > pid->output_max) {
+ 167              		.loc 1 31 4 is_stmt 1 view .LVU43
+ 168              		.loc 1 31 27 is_stmt 0 view .LVU44
+ 169 003e D4F82090 		ldr	r9, [r4, #32]	@ float
+ 170              		.loc 1 31 7 view .LVU45
+ 171 0042 4946     		mov	r1, r9
+ 172 0044 FFF7FEFF 		bl	__aeabi_fcmpgt
+ 173              	.LVL15:
+ 174 0048 0028     		cmp	r0, #0
+ 175 004a 2FD0     		beq	.L21
+  32:BSP/pid.c     ****         pid->integral = pid->output_max;
+ 176              		.loc 1 32 9 is_stmt 1 view .LVU46
+ 177              		.loc 1 32 23 is_stmt 0 view .LVU47
+ 178 004c C4F81090 		str	r9, [r4, #16]	@ float
+ 179              	.L9:
+  33:BSP/pid.c     ****     } else if (pid->integral < pid->output_min) {
+  34:BSP/pid.c     ****         pid->integral = pid->output_min;
+  35:BSP/pid.c     ****     }
+  36:BSP/pid.c     ****     // 计算微分项
+  37:BSP/pid.c     ****     float derivative = (error - pid->previous_error) / time_change;
+ 180              		.loc 1 37 5 is_stmt 1 view .LVU48
+ 181              		.loc 1 37 31 is_stmt 0 view .LVU49
+ 182 0050 6169     		ldr	r1, [r4, #20]	@ float
+ 183 0052 3046     		mov	r0, r6
+ 184 0054 FFF7FEFF 		bl	__aeabi_fsub
+ 185              	.LVL16:
+ 186              		.loc 1 37 11 view .LVU50
+ 187 0058 3946     		mov	r1, r7
+ 188 005a FFF7FEFF 		bl	__aeabi_fdiv
+ 189              	.LVL17:
+ 190 005e 8046     		mov	r8, r0
+ 191              	.LVL18:
+  38:BSP/pid.c     ****     // 计算输出
+  39:BSP/pid.c     ****     pid->output = pid->Kp * error + pid->Ki * pid->integral + pid->Kd * derivative;
+ 192              		.loc 1 39 5 is_stmt 1 view .LVU51
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 5
+
+
+ 193              		.loc 1 39 27 is_stmt 0 view .LVU52
+ 194 0060 3146     		mov	r1, r6
+ 195 0062 2068     		ldr	r0, [r4]	@ float
+ 196              	.LVL19:
+ 197              		.loc 1 39 27 view .LVU53
+ 198 0064 FFF7FEFF 		bl	__aeabi_fmul
+ 199              	.LVL20:
+ 200 0068 0746     		mov	r7, r0
+ 201              	.LVL21:
+ 202              		.loc 1 39 45 view .LVU54
+ 203 006a 2169     		ldr	r1, [r4, #16]	@ float
+ 204 006c 6068     		ldr	r0, [r4, #4]	@ float
+ 205 006e FFF7FEFF 		bl	__aeabi_fmul
+ 206              	.LVL22:
+ 207 0072 0146     		mov	r1, r0
+ 208              		.loc 1 39 35 view .LVU55
+ 209 0074 3846     		mov	r0, r7
+ 210 0076 FFF7FEFF 		bl	__aeabi_fadd
+ 211              	.LVL23:
+ 212 007a 0746     		mov	r7, r0
+ 213              		.loc 1 39 71 view .LVU56
+ 214 007c 4146     		mov	r1, r8
+ 215 007e A068     		ldr	r0, [r4, #8]	@ float
+ 216 0080 FFF7FEFF 		bl	__aeabi_fmul
+ 217              	.LVL24:
+ 218 0084 0146     		mov	r1, r0
+ 219              		.loc 1 39 61 view .LVU57
+ 220 0086 3846     		mov	r0, r7
+ 221 0088 FFF7FEFF 		bl	__aeabi_fadd
+ 222              	.LVL25:
+ 223 008c 0746     		mov	r7, r0
+ 224              		.loc 1 39 17 view .LVU58
+ 225 008e A061     		str	r0, [r4, #24]	@ float
+  40:BSP/pid.c     **** 
+  41:BSP/pid.c     ****     // 设置输出限幅
+  42:BSP/pid.c     ****     if (pid->output > pid->output_max) {
+ 226              		.loc 1 42 5 is_stmt 1 view .LVU59
+ 227              		.loc 1 42 8 is_stmt 0 view .LVU60
+ 228 0090 0146     		mov	r1, r0
+ 229 0092 4846     		mov	r0, r9
+ 230 0094 FFF7FEFF 		bl	__aeabi_fcmplt
+ 231              	.LVL26:
+ 232 0098 98B1     		cbz	r0, .L22
+  43:BSP/pid.c     ****         pid->output = pid->output_max;
+ 233              		.loc 1 43 9 is_stmt 1 view .LVU61
+ 234              		.loc 1 43 21 is_stmt 0 view .LVU62
+ 235 009a C4F81890 		str	r9, [r4, #24]	@ float
+ 236              	.LVL27:
+ 237              	.L13:
+  44:BSP/pid.c     ****     } else if (pid->output < pid->output_min) {
+  45:BSP/pid.c     ****         pid->output = pid->output_min;
+  46:BSP/pid.c     ****     }
+  47:BSP/pid.c     **** 
+  48:BSP/pid.c     ****     // 更新状态
+  49:BSP/pid.c     ****     pid->previous_error = error;
+ 238              		.loc 1 49 5 is_stmt 1 view .LVU63
+ 239              		.loc 1 49 25 is_stmt 0 view .LVU64
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 6
+
+
+ 240 009e 6661     		str	r6, [r4, #20]	@ float
+  50:BSP/pid.c     ****     pid->last_time = now;
+ 241              		.loc 1 50 5 is_stmt 1 view .LVU65
+ 242              		.loc 1 50 20 is_stmt 0 view .LVU66
+ 243 00a0 6562     		str	r5, [r4, #36]
+  51:BSP/pid.c     **** 
+  52:BSP/pid.c     ****     return pid->output;
+ 244              		.loc 1 52 5 is_stmt 1 view .LVU67
+ 245              		.loc 1 52 15 is_stmt 0 view .LVU68
+ 246 00a2 A069     		ldr	r0, [r4, #24]	@ float
+ 247              	.LVL28:
+ 248              	.L3:
+  53:BSP/pid.c     **** }
+ 249              		.loc 1 53 1 view .LVU69
+ 250 00a4 BDE8F087 		pop	{r4, r5, r6, r7, r8, r9, r10, pc}
+ 251              	.LVL29:
+ 252              	.L24:
+  24:BSP/pid.c     ****     }
+ 253              		.loc 1 24 9 is_stmt 1 view .LVU70
+  24:BSP/pid.c     ****     }
+ 254              		.loc 1 24 19 is_stmt 0 view .LVU71
+ 255 00a8 A069     		ldr	r0, [r4, #24]	@ float
+ 256 00aa FBE7     		b	.L3
+ 257              	.LVL30:
+ 258              	.L21:
+  33:BSP/pid.c     ****         pid->integral = pid->output_min;
+ 259              		.loc 1 33 12 is_stmt 1 view .LVU72
+  33:BSP/pid.c     ****         pid->integral = pid->output_min;
+ 260              		.loc 1 33 35 is_stmt 0 view .LVU73
+ 261 00ac D4F81CA0 		ldr	r10, [r4, #28]	@ float
+  33:BSP/pid.c     ****         pid->integral = pid->output_min;
+ 262              		.loc 1 33 15 view .LVU74
+ 263 00b0 5146     		mov	r1, r10
+ 264 00b2 4046     		mov	r0, r8
+ 265 00b4 FFF7FEFF 		bl	__aeabi_fcmplt
+ 266              	.LVL31:
+ 267 00b8 0028     		cmp	r0, #0
+ 268 00ba C9D0     		beq	.L9
+  34:BSP/pid.c     ****     }
+ 269              		.loc 1 34 9 is_stmt 1 view .LVU75
+  34:BSP/pid.c     ****     }
+ 270              		.loc 1 34 23 is_stmt 0 view .LVU76
+ 271 00bc C4F810A0 		str	r10, [r4, #16]	@ float
+ 272 00c0 C6E7     		b	.L9
+ 273              	.LVL32:
+ 274              	.L22:
+  44:BSP/pid.c     ****         pid->output = pid->output_min;
+ 275              		.loc 1 44 12 is_stmt 1 view .LVU77
+  44:BSP/pid.c     ****         pid->output = pid->output_min;
+ 276              		.loc 1 44 33 is_stmt 0 view .LVU78
+ 277 00c2 D4F81C80 		ldr	r8, [r4, #28]	@ float
+ 278              	.LVL33:
+  44:BSP/pid.c     ****         pid->output = pid->output_min;
+ 279              		.loc 1 44 15 view .LVU79
+ 280 00c6 4146     		mov	r1, r8
+ 281 00c8 3846     		mov	r0, r7
+ 282 00ca FFF7FEFF 		bl	__aeabi_fcmplt
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 7
+
+
+ 283              	.LVL34:
+ 284 00ce 0028     		cmp	r0, #0
+ 285 00d0 E5D0     		beq	.L13
+  45:BSP/pid.c     ****     }
+ 286              		.loc 1 45 9 is_stmt 1 view .LVU80
+  45:BSP/pid.c     ****     }
+ 287              		.loc 1 45 21 is_stmt 0 view .LVU81
+ 288 00d2 C4F81880 		str	r8, [r4, #24]	@ float
+ 289 00d6 E2E7     		b	.L13
+ 290              		.cfi_endproc
+ 291              	.LFE8:
+ 293              		.text
+ 294              	.Letext0:
+ 295              		.file 2 "d:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.10\\arm-none-eabi\\include\\
+ 296              		.file 3 "d:\\program files (x86)\\gnu arm embedded toolchain\\10 2021.10\\arm-none-eabi\\include\\
+ 297              		.file 4 "Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM3/portmacro.h"
+ 298              		.file 5 "BSP/pid.h"
+ 299              		.file 6 "Middlewares/Third_Party/FreeRTOS/Source/include/task.h"
+ARM GAS  C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s 			page 8
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 pid.c
+C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s:18     .text.PID_Init:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s:24     .text.PID_Init:00000000 PID_Init
+C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s:93     .text.PID_Compute:00000000 $t
+C:\Users\tre\AppData\Local\Temp\ccQhDtNa.s:99     .text.PID_Compute:00000000 PID_Compute
+
+UNDEFINED SYMBOLS
+xTaskGetTickCount
+__aeabi_ui2f
+__aeabi_fcmpeq
+__aeabi_fsub
+__aeabi_fmul
+__aeabi_fadd
+__aeabi_fcmpgt
+__aeabi_fcmplt
+__aeabi_fdiv
