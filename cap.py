@@ -11,6 +11,9 @@ cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 frame_count = 0
 background_saved = False
 
+def Save_Background(img):
+    cv2.imwrite("background.jpg", img)
+
 while frame_count < 10000:  # 循环直到捕获到第六帧
     ret, frame = cap.read()
     if not ret:
@@ -20,7 +23,7 @@ while frame_count < 10000:  # 循环直到捕获到第六帧
     frame_count += 1
 
     if frame_count == 10:  # 第六帧时保存
-        cv2.imwrite("background.jpg", frame)
+        Save_Background(frame)
         background_saved = True
         print("背景图片已保存为 background.jpg")
         break

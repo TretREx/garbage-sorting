@@ -44,12 +44,15 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.infer_result = None
         self.accumulated_category_count = {label: 0 for label in self.categories}
 
+        # 打开摄像头
         self.camera_id = 0
         self.video_file = '1.mp4'
         self.cap = cv2.VideoCapture(self.video_file)
 
         self.is_playing = True #画面显示
         self.camera_is_playing = False #摄像头正在运行
+
+        #图像更新
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
@@ -113,10 +116,15 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
 
     def update_gpio_values(self):
         gpio_values = self.gpio_reader.read_pin_states()  # 假设这个方法返回一个字典
-        self.gpio_table.setItem(0, 0, QTableWidgetItem("满载" if gpio_values.get(35) else "未满载"))
-        self.gpio_table.setItem(1, 0, QTableWidgetItem("满载" if gpio_values.get(36) else "未满载"))
-        self.gpio_table.setItem(2, 0, QTableWidgetItem("满载" if gpio_values.get(37) else "未满载"))
-        self.gpio_table.setItem(3, 0, QTableWidgetItem("满载" if gpio_values.get(38) else "未满载"))
+
+        base_gpios = self.gpio_reader.pins[:4]
+        index = (self.Servo_Angle // 90) % 4
+        gpios = base_gpios[index:] + base_gpios[:index]
+
+        self.gpio_table.setItem(0, 0, QTableWidgetItem("满载" if gpio_values.get(gpios[0]) else "未满载"))
+        self.gpio_table.setItem(1, 0, QTableWidgetItem("满载" if gpio_values.get(gpios[1]) else "未满载"))
+        self.gpio_table.setItem(2, 0, QTableWidgetItem("满载" if gpio_values.get(gpios[2]) else "未满载"))
+        self.gpio_table.setItem(3, 0, QTableWidgetItem("满载" if gpio_values.get(gpios[3]) else "未满载"))
         if not gpio_values.get(40):
             if self.camera_is_playing:
                 pass

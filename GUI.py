@@ -12,11 +12,11 @@ class MYGUI(QWidget):
         # 创建一个表格来显示垃圾状态
         self.gpio_table = QTableWidget(self)
         self.gpio_table.setStyleSheet("font-size: 10pt;")  # Set font size for UART text box
-        self.gpio_table.setFixedSize(300, 160)
+        self.gpio_table.setFixedSize(200, 160)
         self.gpio_table.setGeometry(700, 400, 300, 160)  # 调整位置和大小
         self.gpio_table.setRowCount(4)  # 行数为 4（四种垃圾）
         self.gpio_table.setColumnCount(1)  # 列数为 1
-        self.gpio_table.setHorizontalHeaderLabels(["垃圾状态"])  # 设置表头
+        self.gpio_table.setHorizontalHeaderLabels(["垃圾满载状态"])  # 设置表头
         self.gpio_table.setVerticalHeaderLabels([
             "可回收垃圾",
             "厨余垃圾",
@@ -43,10 +43,11 @@ class MYGUI(QWidget):
         self.switch_button.setGeometry(self.video_size[0] + 20 - 50, self.video_size[1] + 20, 50, 30)
 
         self.text_uart = QTextEdit("", self)
+        self.text_uart_size = (300,120)
         self.text_uart.setReadOnly(True)
         self.text_uart.setStyleSheet("font-size: 10pt;")  # Set font size for UART text box
-        self.text_uart.setFixedSize(300, 240)
-        self.text_uart.setGeometry(700, 50, 300, 240)
+        self.text_uart.setFixedSize( self.text_uart_size[0],  self.text_uart_size[1])
+        self.text_uart.setGeometry(700, 50,  self.text_uart_size[0],  self.text_uart_size[1])
 
         # Create a dropdown for serial port selection
         self.port_combo = QComboBox(self)
@@ -66,27 +67,31 @@ class MYGUI(QWidget):
         self.clear_button.setFixedSize(100, 30)
         self.clear_button.setGeometry(300, 500, 100, 30)
 
+        self.action_button_size = (60,25)
+
         self.action1_button = QPushButton("Action1", self)  # "Start" in Chinese
-        self.action1_button.setFixedSize(75, 30)
-        self.action1_button.setGeometry(700, 310 , 75, 30)
+        self.action1_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.action1_button.setGeometry(700, 310 , self.action_button_size[0], self.action_button_size[1])
 
         self.action2_button = QPushButton("Action2", self)  # "Start" in Chinese
-        self.action2_button.setFixedSize(75, 30)
-        self.action2_button.setGeometry(780, 310 , 75, 30)
+        self.action2_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.action2_button.setGeometry(700+70, 310 , self.action_button_size[0], self.action_button_size[1])
 
         self.action3_button = QPushButton("Action3", self)  # "Start" in Chinese
-        self.action3_button.setFixedSize(75, 30)
-        self.action3_button.setGeometry(700, 350 , 75, 30)
+        self.action3_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.action3_button.setGeometry(700+70*2, 310 ,self.action_button_size[0], self.action_button_size[1])
 
         self.action4_button = QPushButton("Action4", self)  # "Start" in Chinese
-        self.action4_button.setFixedSize(75, 30)
-        self.action4_button.setGeometry(780, 350 , 75, 30)
-
+        self.action4_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.action4_button.setGeometry(700+70*3, 310 ,self.action_button_size[0], self.action_button_size[1])
 
         self.Reset_button = QPushButton("Reset", self)  # "Start" in Chinese
-        self.Reset_button.setFixedSize(75, 30)
-        self.Reset_button.setGeometry(860, 320 , 75, 30)
+        self.Reset_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.Reset_button.setGeometry(700, 345 , self.action_button_size[0], self.action_button_size[1])
 
+        self.Reset_button = QPushButton("Save_B", self)  # "Start" in Chinese
+        self.Reset_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.Reset_button.setGeometry(770, 345 , self.action_button_size[0], self.action_button_size[1])
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     player = MYGUI()
