@@ -9,6 +9,7 @@ class MYGUI(QWidget):
         super().__init__()
         self.setWindowTitle("垃圾分类实验")  # "Garbage Classification Experiment"
         self.setFixedSize(1024, 600)
+        self.setStyleSheet("background-color:  #00FF00;")
         # 创建一个表格来显示垃圾状态
         self.gpio_table = QTableWidget(self)
         self.gpio_table.setStyleSheet("font-size: 10pt;")  # Set font size for UART text box
@@ -47,7 +48,7 @@ class MYGUI(QWidget):
         self.text_uart.setReadOnly(True)
         self.text_uart.setStyleSheet("font-size: 10pt;")  # Set font size for UART text box
         self.text_uart.setFixedSize( self.text_uart_size[0],  self.text_uart_size[1])
-        self.text_uart.setGeometry(700, 50,  self.text_uart_size[0],  self.text_uart_size[1])
+        self.text_uart.setGeometry(700, 50,  self.text_uart_size[0], self.text_uart_size[1])
 
         # Create a dropdown for serial port selection
         self.port_combo = QComboBox(self)
@@ -89,9 +90,9 @@ class MYGUI(QWidget):
         self.Reset_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
         self.Reset_button.setGeometry(700, 345 , self.action_button_size[0], self.action_button_size[1])
 
-        self.Reset_button = QPushButton("Save_B", self)  # "Start" in Chinese
-        self.Reset_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
-        self.Reset_button.setGeometry(770, 345 , self.action_button_size[0], self.action_button_size[1])
+        self.Save_button = QPushButton("Save_B", self)  # "Start" in Chinese
+        self.Save_button.setFixedSize(self.action_button_size[0], self.action_button_size[1])
+        self.Save_button.setGeometry(770, 345 , self.action_button_size[0], self.action_button_size[1])
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     player = MYGUI()

@@ -1,6 +1,6 @@
 from uart import *  # 假设 uart 是一个自定义的串口通信模块
 import time
-
+from image import compare_images3
 class STM32CONTROL(SerialThread):
     def __init__(self):
         super().__init__()
@@ -84,6 +84,9 @@ class STM32CONTROL(SerialThread):
             return
         time.sleep(1)
         self.motor_start()
+
+    def Compress(self,num):
+        self.send_uart_packet(4, num, self.COMMAND_MOTOR_SPEED)#压缩
 
     def Reset(self):
         if not self.uart_running:  # 检查是否连接

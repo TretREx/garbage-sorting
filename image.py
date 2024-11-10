@@ -2,7 +2,7 @@
 import cv2
 import numpy as np
 import time
-def compare_images(background_path, target_path, threshold=50, kernel_size=(7, 7), blur_size=(5, 5), binary_thresh=30):
+def compare_images(background_path, target_path, threshold=5000, kernel_size=(7, 7), blur_size=(5, 5), binary_thresh=30):
     background_img = cv2.imread(background_path, cv2.IMREAD_GRAYSCALE)
     target_img = cv2.imread(target_path, cv2.IMREAD_GRAYSCALE)
     if background_img is None or target_img is None:
@@ -56,12 +56,13 @@ def compare_images3(background_path,target_img , threshold=5000, kernel_size=(7,
     non_zero_count = cv2.countNonZero(binary_img)
     is_consistent = non_zero_count < threshold
     result = True if is_consistent else False
-    return {
-        "result": result,
-        "non_zero_count":non_zero_count,
-        "is_consistent": is_consistent,
-        "binary_img": binary_img
-    }
+    return result
+    # return {
+    #     "result": result,
+    #     "non_zero_count":non_zero_count,
+    #     "is_consistent": is_consistent,
+    #     "binary_img": binary_img
+    # }
 
 if __name__ == "__main__":
     # result = compare_images('background.jpg', 'c1.jpg')

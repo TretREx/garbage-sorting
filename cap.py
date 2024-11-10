@@ -14,22 +14,23 @@ background_saved = False
 def Save_Background(img):
     cv2.imwrite("background.jpg", img)
 
-while frame_count < 10000:  # 循环直到捕获到第六帧
-    ret, frame = cap.read()
-    if not ret:
-        print("未能捕获图像")
-        break
+if __name__ == "__main__":
+    while frame_count < 10000:  # 循环直到捕获到第六帧
+        ret, frame = cap.read()
+        if not ret:
+            print("未能捕获图像")
+            break
 
-    frame_count += 1
+        frame_count += 1
 
-    if frame_count == 10:  # 第六帧时保存
-        Save_Background(frame)
-        background_saved = True
-        print("背景图片已保存为 background.jpg")
-        break
+        if frame_count == 10:  # 第六帧时保存
+            Save_Background(frame)
+            background_saved = True
+            print("背景图片已保存为 background.jpg")
+            break
 
-# 释放摄像头
-cap.release()
+    # 释放摄像头
+    cap.release()
 
-if not background_saved:
-    print("未能保存背景图片")
+    if not background_saved:
+        print("未能保存背景图片")

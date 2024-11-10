@@ -16,6 +16,7 @@ from yolov7_inference import *
 from stm32 import STM32CONTROL
 from GUI import MYGUI
 from image import *
+from cap import Save_Background
 
 class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
     def __init__(self):
@@ -33,6 +34,7 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.action3_button.clicked.connect(self.action3)
         self.action4_button.clicked.connect(self.action4)
         self.Reset_button.clicked.connect(self.Reset)
+        self.Save_button.clicked.connect(self.SaveBackground)
 
         #yolo初始化部分
         ctypes.CDLL("libmyplugins.so")
@@ -59,7 +61,7 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.log_message("Initialized video player.")
 
         self.serial_timer = QTimer()#串口扫描
-        self.serial_timer.timeout.connect(self.check_serial_status)
+        self.serial_timer.timeout.connect(self.update_serial_ports)
         self.serial_timer.start(1000)  # 1000 ms = 1 Hz
 
         self.gpio_timer = QTimer()#满载检测
@@ -70,6 +72,17 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.Reset_timer_isOn = False
         self.Reset_timer.setSingleShot(True)  # 设置为一次性定时器
         self.Reset_timer.timeout.connect(self.Reset_Accumulated)
+
+    def SaveBackground(self):
+            if self.camera_is_playing:
+                ret, frame = self.cap.read()
+                if ret:
+                    Save_Background(frame)
+                    self.log_message(f"保存背景成功: background.jpg")
+                else:
+                    self.log_message("保存背景失败")
+            else:
+                self.log_message("摄像头未工作，保存背景失败")
 
     def Reset_Accumulated(self):
         self.accumulated_category_count = {label: 0 for label in self.categories}
@@ -98,13 +111,6 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
             self.connect_button.setText("连接串口")  # Reset button text to "Connect Serial Port"
             self.log_message("Failed to connect/disconnect from serial port.")
 
-
-    def check_serial_status(self):
-        ports = self.scan_ports()
-        self.port_combo.clear()
-        for port in ports:
-            self.port_combo.addItem(port)
-
     def display_uart_data(self, data):
         self.text_uart.append(data)
 
@@ -115,7 +121,7 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.text_log.append(message)
 
     def update_gpio_values(self):
-        gpio_values = self.gpio_reader.read_pin_states()  # 假设这个方法返回一个字典
+        gpio_values = self.gpio_reader.read_pin_states()
 
         base_gpios = self.gpio_reader.pins[:4]
         index = (self.Servo_Angle // 90) % 4
