@@ -21,7 +21,10 @@ class STM32CONTROL(SerialThread):
             return
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 1,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
-        self.take_out()
+        self.take_out()#倒垃圾
+        self.Compress()#压缩
+        self.motor_start()#开启电机
+
 
     def action2(self):
         if not self.uart_running:  # 检查是否连接
@@ -37,6 +40,7 @@ class STM32CONTROL(SerialThread):
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 2,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
         self.take_out()
+        self.motor_start()
 
     def action3(self):
         if not self.uart_running:  # 检查是否连接
@@ -52,6 +56,7 @@ class STM32CONTROL(SerialThread):
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 3,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
         self.take_out()
+        self.motor_start()
 
     def action4(self):
         if not self.uart_running:  # 检查是否连接
@@ -67,6 +72,7 @@ class STM32CONTROL(SerialThread):
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 4,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
         self.take_out()
+        self.motor_start()
 
     def take_out(self):
         if not self.uart_running:  # 检查是否连接
@@ -83,10 +89,13 @@ class STM32CONTROL(SerialThread):
             self.Log_Text("错误: 取出重置的 UART 数据包发送失败.")
             return
         time.sleep(1)
-        self.motor_start()
 
-    def Compress(self,num):
-        self.send_uart_packet(4, num, self.COMMAND_MOTOR_SPEED)#压缩
+    def Compress(self):
+        self.send_uart_packet(4, 1, self.COMMAND_MOTOR_SPEED)#压缩
+        time.sleep(1)
+        self.send_uart_packet(4, 2, self.COMMAND_MOTOR_SPEED)#回退
+        time.sleep(1)
+        self.send_uart_packet(4, 0, self.COMMAND_MOTOR_SPEED)#停止
 
     def Reset(self):
         if not self.uart_running:  # 检查是否连接
