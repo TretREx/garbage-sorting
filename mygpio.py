@@ -9,7 +9,7 @@ class GPIOReader:
 
     def setup_pins(self):
         for pin in self.pins:
-            GPIO.setup(pin, GPIO.IN)
+            GPIO.setup(pin, GPIO.IN,pull_up_down=GPIO.PUD_UP)
 
     def read_pin_states(self):
         states = {}

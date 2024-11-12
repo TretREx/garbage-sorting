@@ -1,0 +1,28 @@
+(myenv) tre@tre:~/garbage-sorting$ python main.py
+[ WARN:0@0.669] global /io/opencv/modules/videoio/src/cap_v4l.cpp (889) open VIDEOIO(V4L2:/dev/video0): can't open camera by index
+/home/tre/myenv/lib/python3.6/site-packages/Jetson/GPIO/gpio.py:345: UserWarning: Jetson.GPIO ignores setup()'s pull_up_down parameter
+  warnings.warn("Jetson.GPIO ignores setup()'s pull_up_down parameter")
+Traceback (most recent call last):
+  File "/home/tre/myenv/lib/python3.6/site-packages/Jetson/GPIO/gpio_cdev.py", line 210, in open_line
+    fcntl.ioctl(ch_info.chip_fd, GPIO_GET_LINEHANDLE_IOCTL, request)
+OSError: [Errno 16] Device or resource busy
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "main.py", line 347, in <module>
+    player = VideoPlayer()
+  File "main.py", line 30, in __init__
+    self.gpio_reader = GPIOReader(self.gpios)
+  File "/home/tre/garbage-sorting/mygpio.py", line 8, in __init__
+    self.setup_pins()
+  File "/home/tre/garbage-sorting/mygpio.py", line 12, in setup_pins
+    GPIO.setup(pin, GPIO.IN,pull_up_down=GPIO.PUD_UP)
+  File "/home/tre/myenv/lib/python3.6/site-packages/Jetson/GPIO/gpio.py", line 363, in setup
+    _do_one_channel(ch_info, direction, initial, consumer)
+  File "/home/tre/myenv/lib/python3.6/site-packages/Jetson/GPIO/gpio.py", line 161, in _do_one_channel
+    gpio_cdev.open_line(ch_info, request)
+  File "/home/tre/myenv/lib/python3.6/site-packages/Jetson/GPIO/gpio_cdev.py", line 213, in open_line
+    raise GPIOError(e.errno, "Opening output line handle: " + e.strerror)
+Jetson.GPIO.gpio_cdev.GPIOError: [Errno 16] Opening output line handle: Device or resource busy
+

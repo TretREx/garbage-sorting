@@ -8,7 +8,7 @@ import ctypes
 
 class YoLov7TRT:
     def __init__(self, engine_file_path):
-        self.CONF_THRESH = 0.45
+        self.CONF_THRESH = 0.50
         self.IOU_THRESHOLD = 0.4
         # 初始化CUDA上下文
         self.ctx = cuda.Device(0).make_context()
@@ -147,7 +147,7 @@ def plot_boxes(img, boxes, labels, colors):
 
 
 if __name__ == "__main__":
-    engine_file_path = "best_600.engine"
+    engine_file_path = "yolov7-tiny.engine"
     ctypes.CDLL("libmyplugins.so")
     categories = ['Hazardous waste', 'Kitchen waste', 'Other waste', 'Recyclable waste']
     colors = [(0, 0, 255), (255, 0, 0), (244, 164, 96), (0, 255, 0)]

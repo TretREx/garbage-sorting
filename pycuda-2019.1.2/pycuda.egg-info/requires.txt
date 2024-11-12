@@ -1,0 +1,4 @@
+appdirs>=1.4.0
+decorator>=3.2.0
+mako
+pytools>=2011.2

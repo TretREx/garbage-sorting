@@ -4,11 +4,11 @@ from image import compare_images3
 class STM32CONTROL(SerialThread):
     def __init__(self):
         super().__init__()
-        self.Servo_Angle = 0
-        self.Servo_Target_Angle = 0
+        self.Servo_Angle = 90
+        self.Servo_Target_Angle = 90
         self.is_running = False
 
-    def action1(self):
+    def action1(self):#有害垃圾
         if not self.uart_running:  # 检查是否连接
             self.Log_Text("错误: 未连接串口.")
             return
@@ -16,24 +16,25 @@ class STM32CONTROL(SerialThread):
         self.Servo_Target_Angle = 0
         timer = abs(self.Servo_Angle - self.Servo_Target_Angle)
         success = self.send_uart_packet(3, 0, self.COMMAND_MOTOR_ANGLE)
+        self.Servo_Angle =  self.Servo_Target_Angle
         if not success:
             self.Log_Text("错误: 动作 1 的 UART 数据包发送失败.")
             return
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 1,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
         self.take_out()#倒垃圾
-        self.Compress()#压缩
         self.motor_start()#开启电机
 
 
-    def action2(self):
+    def action2(self):#其他垃圾
         if not self.uart_running:  # 检查是否连接
             self.Log_Text("错误: 未连接串口.")
             return
         self.motor_stop()
-        self.Servo_Target_Angle = 90
+        self.Servo_Target_Angle = 270
         timer = abs(self.Servo_Angle - self.Servo_Target_Angle)
-        success = self.send_uart_packet(3, 90, self.COMMAND_MOTOR_ANGLE)
+        success = self.send_uart_packet(3, 270, self.COMMAND_MOTOR_ANGLE)
+        self.Servo_Angle =  self.Servo_Target_Angle
         if not success:
             self.Log_Text("错误: 动作 2 的 UART 数据包发送失败.")
             return
@@ -42,7 +43,7 @@ class STM32CONTROL(SerialThread):
         self.take_out()
         self.motor_start()
 
-    def action3(self):
+    def action3(self):#可回收垃圾
         if not self.uart_running:  # 检查是否连接
             self.Log_Text("错误: 未连接串口.")
             return
@@ -50,6 +51,7 @@ class STM32CONTROL(SerialThread):
         self.Servo_Target_Angle = 180
         timer = abs(self.Servo_Angle - self.Servo_Target_Angle)
         success = self.send_uart_packet(3, 180, self.COMMAND_MOTOR_ANGLE)
+        self.Servo_Angle =  self.Servo_Target_Angle
         if not success:
             self.Log_Text("错误: 动作 3 的 UART 数据包发送失败.")
             return
@@ -63,22 +65,23 @@ class STM32CONTROL(SerialThread):
             self.Log_Text("错误: 未连接串口.")
             return
         self.motor_stop()
-        self.Servo_Target_Angle = 270
+        self.Servo_Target_Angle = 90
         timer = abs(self.Servo_Angle - self.Servo_Target_Angle)
-        success = self.send_uart_packet(3, 270, self.COMMAND_MOTOR_ANGLE)
+        success = self.send_uart_packet(3, 90, self.COMMAND_MOTOR_ANGLE)
+        self.Servo_Angle =  self.Servo_Target_Angle
         if not success:
             self.Log_Text("错误: 动作 4 的 UART 数据包发送失败.")
             return
         time.sleep(timer / 90)
         self.Log_Text(f"执行动作 4,目标角度{self.Servo_Target_Angle},当前角度{self.Servo_Angle},所需时间{timer / 90}")
         self.take_out()
+        self.Compress()#压缩
         self.motor_start()
 
     def take_out(self):
         if not self.uart_running:  # 检查是否连接
             self.Log_Text("错误: 未连接串口.")
             return
-        self.Servo_Angle = self.Servo_Target_Angle
         success = self.send_uart_packet(4, 90, self.COMMAND_MOTOR_ANGLE)
         if not success:
             self.Log_Text("错误: 取出操作的 UART 数据包发送失败.")
@@ -91,21 +94,22 @@ class STM32CONTROL(SerialThread):
         time.sleep(1)
 
     def Compress(self):
+        print("压缩中......")
         self.send_uart_packet(4, 1, self.COMMAND_MOTOR_SPEED)#压缩
-        time.sleep(1)
+        time.sleep(3.5)
         self.send_uart_packet(4, 2, self.COMMAND_MOTOR_SPEED)#回退
-        time.sleep(1)
+        time.sleep(3.5)
         self.send_uart_packet(4, 0, self.COMMAND_MOTOR_SPEED)#停止
 
     def Reset(self):
         if not self.uart_running:  # 检查是否连接
             self.Log_Text("错误: 未连接串口.")
             return
-        self.send_uart_packet(1, 0, self.COMMAND_MOTOR_SPEED)
-        self.send_uart_packet(2, 0, self.COMMAND_MOTOR_SPEED)
-        self.send_uart_packet(3, 0, self.COMMAND_MOTOR_SPEED)
-        self.Servo_Angle = 0
-        self.send_uart_packet(3, 0, self.COMMAND_MOTOR_ANGLE)
+        self.send_uart_packet(1, 6, self.COMMAND_MOTOR_SPEED)
+        self.send_uart_packet(2, 6, self.COMMAND_MOTOR_SPEED)
+        self.send_uart_packet(3, 5, self.COMMAND_MOTOR_SPEED)
+        self.Servo_Angle = 90
+        self.send_uart_packet(3, 90, self.COMMAND_MOTOR_ANGLE)
         self.send_uart_packet(4, 0, self.COMMAND_MOTOR_ANGLE)
         self.is_running = False
 
