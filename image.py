@@ -56,7 +56,7 @@ def compare_images3(background_path,target_img , threshold=5000, kernel_size=(7,
     non_zero_count = cv2.countNonZero(binary_img)
     is_consistent = non_zero_count < threshold
     result = True if is_consistent else False
-    return result
+    return result,binary_img
     # return {
     #     "result": result,
     #     "non_zero_count":non_zero_count,
