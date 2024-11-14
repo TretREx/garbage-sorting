@@ -64,6 +64,9 @@ def compare_images3(background_path,target_img , threshold=5000, kernel_size=(7,
     #     "binary_img": binary_img
     # }
 
+def Save_Background(img):
+    cv2.imwrite("background.jpg", img)
+
 if __name__ == "__main__":
     # result = compare_images('background.jpg', 'c1.jpg')
     # if result:

@@ -16,7 +16,6 @@ from yolov7_inference import *
 from stm32 import STM32CONTROL
 from GUI import MYGUI
 from image import *
-from cap import Save_Background
 
 class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
     data_received = pyqtSignal(str)
@@ -64,6 +63,8 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         self.video_file = '1.mp4'
         self.cap = cv2.VideoCapture(self.video_file)
 
+        self.frame_timer_isrunning = False
+
         self.is_playing = True #画面显示
         self.camera_is_playing = False #摄像头正在运行
 
@@ -99,13 +100,10 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
                     print(f"收到数据: {data}")  # 打印到终端，中文支持
                     self.data_received.emit(data)  # 触发信号（如果需要的话）
         except serial.SerialException as e:
-            # 捕获串口相关错误
             print(f"串口错误: {e}")
         except UnicodeDecodeError as e:
-            # 捕获解码错误
             print(f"解码错误: {e}")
         except Exception as e:
-            # 捕获其他所有错误
             print(f"读取串口数据时发生错误: {e}")
 
     def update_uart_output(self,str):
@@ -139,8 +137,7 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         num = self.categories.index(most_frequent_category)
         self.handle_action(num)
         self.categories_num = self.categories_num + 1
-        self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 OK!")
-        self.waitforcam()
+        self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 is OK!")
         self.log_message(f"Most frequent category: {most_frequent_category} with count {self.accumulated_category_count[most_frequent_category]}")
         self.Reset_timer_isOn = False
 
@@ -263,37 +260,46 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
         else:
             return None
 
-
     def update_frame(self):
+        if self.frame_timer_isrunning:
+            return
+        self.frame_timer_isrunning = False
         ret, frame = self.cap.read()
         if not ret:
             self.log_message("End of video reached. Restarting...")
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
             return
-        if self.camera_is_playing:
-                frame_with_boxes,category_count = self.detect_image(frame)#检测并返回图像结果和一个字典
-                num = self.accumulate_and_check_category_count(category_count)#满10次才会返回
-                if num is not None:
-                    self.handle_action(num)
-                    self.categories_num = self.categories_num + 1
-                    self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 OK!")
-                    self.waitforcam()
-                    self.accumulated_category_count.update({label: 0 for label in self.categories})
-                self.log_message(f"Category counts: {self.accumulated_category_count}:{sum(self.accumulated_category_count.values())}")
-                if(sum(self.accumulated_category_count.values())>0):
-                    if self.is_running:#如果有东西并且电机还在移动
-                        self.motor_stop()
-                    if not self.Reset_timer_isOn: #如果定时器未开启则开启定时器
-                        self.Reset_timer_isOn = True
-                        self.Reset_timer.start(4000)#5s内检测完
-                self.SendImage2Lable(frame_with_boxes)
+        if self.camera_is_playing :
+                result,_ = compare_images3("background.jpg",frame)
+                if not result: #如果有异物
+                    frame_with_boxes,category_count = self.detect_image(frame)      #检测并返回图像结果和一个字典
+                    num = self.accumulate_and_check_category_count(category_count)  #满10次才会返回垃圾类型
+                    self.log_message(f"Category counts: {self.accumulated_category_count}:{sum(self.accumulated_category_count.values())}")
+                    if num is not None:
+                        self.Reset_timer.stop()
+                        self.Reset_timer_isOn = False
+
+                        self.handle_action(num)
+                        self.categories_num = self.categories_num + 1 #记录垃圾数量
+                        self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 OK!")
+                        self.accumulated_category_count.update({label: 0 for label in self.categories})
+                    if(sum(self.accumulated_category_count.values())>0): #如果检测不到垃圾 开启定时器
+                        if self.is_running:
+                            self.motor_stop()
+                        if self.Reset_timer_isOn:
+                            pass
+                        else:
+                            self.Reset_timer_isOn = True
+                            self.Reset_timer.start(5000)#5s内检测完
+                    self.SendImage2Lable(frame_with_boxes)
+                else:
+                    if not self.is_running:
+                        self.motor_start()
+                    pass
+                self.SendImage2Lable(frame)
         else:
             self.SendImage2Lable(frame)
-
-    def waitforcam(self):
-        self.cap.release()
-        self.cap = cv2.VideoCapture(self.camera_id)
-        self.accumulated_category_count.update({label: 0 for label in self.categories})
+        self.frame_timer_isrunning = False
 
     def handle_action(self, num):
         # 创建一个字典，映射数字到对应的操作和日志
@@ -304,29 +310,23 @@ class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
             3: ("action4", self.action4)
         }
 
-        # 如果 num 存在于字典中，则执行相应的操作
         if num is not None and num in actions:
             action_name, action_func = actions[num]
             self.log_message(action_name)
             action_func()
 
     def detect_image(self,frame):
-            result = compare_images3("background.jpg",frame)
-            if(not result):
-                input_image, _ = self.yolov7_wrapper.preprocess_image(frame)
-                output = self.yolov7_wrapper.infer(input_image)
-                result_boxes = self.yolov7_wrapper.post_process(output, frame.shape[0], frame.shape[1])
-                # 记录推理结束时间
-                infer_end_time = time.time()
-                # 计算推理时间（毫秒）
-                infer_time = infer_end_time - self.infer_start_time
-                self.infer_start_time = infer_end_time
-                fps = 1 / infer_time
-                cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                return plot_boxes(frame, result_boxes, self.categories, self.colors)
-            else:
-                category_count = {label: 0 for label in self.categories}
-                return frame, category_count
+            input_image, _ = self.yolov7_wrapper.preprocess_image(frame)
+            output = self.yolov7_wrapper.infer(input_image)
+            result_boxes = self.yolov7_wrapper.post_process(output, frame.shape[0], frame.shape[1])
+            # 记录推理结束时间
+            infer_end_time = time.time()
+            # 计算推理时间（毫秒）
+            infer_time = infer_end_time - self.infer_start_time
+            self.infer_start_time = infer_end_time
+            fps = 1 / infer_time
+            cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            return plot_boxes(frame, result_boxes, self.categories, self.colors)
 
     def SendImage2Lable(self,frame):
         frame = cv2.resize(frame, self.video_size)
