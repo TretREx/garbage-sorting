@@ -1,349 +1,257 @@
-#主程序
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QTextEdit, QComboBox, QTableWidget, QTableWidgetItem
-from PyQt5.QtGui import QImage, QPixmap
-import serial
-from PyQt5.QtCore import QTimer
-import pycuda.autoinit  # 自动初始化CUDA
-import time
-import serial.tools.list_ports
-from mygpio import GPIOReader
-from uart import *
 import cv2
+import numpy as np
+import pycuda.autoinit  # 自动初始化CUDA
+import pycuda.driver as cuda
+import tensorrt as trt
 import time
 import ctypes
-from yolov7_inference import *
-from stm32 import STM32CONTROL
-from GUI import MYGUI
-from image import *
 
-class VideoPlayer(MYGUI,QWidget,STM32CONTROL):
-    data_received = pyqtSignal(str)
-    def __init__(self):
-        super().__init__()
+class YoLov7TRT:
+    def __init__(self, engine_file_path, categories, default_conf_threshold=0.5, iou_threshold=0.4):
+        """
+        初始化YOLOv7 TensorRT推理器。
 
-        self.last2states =0
-        self.laststates=0
-        self.categories_num = 0
-        self.gpios = [21, 22, 23, 24, 26]
-        self.gpio_reader = GPIOReader(self.gpios)
+        :param engine_file_path: TensorRT引擎文件路径。
+        :param categories: 类别名称列表。
+        :param default_conf_threshold: 默认的置信度阈值（应用于所有类别）。
+        :param iou_threshold: 非极大值抑制的IoU阈值。
+        """
+        self.categories = categories
+        self.CONF_THRESH = {category: default_conf_threshold for category in categories}
+        self.IOU_THRESHOLD = iou_threshold
 
-        self.update_serial_ports()
-        self.connect_serial()
+        # 初始化CUDA上下文
+        self.ctx = cuda.Device(0).make_context()
+        self.stream = cuda.Stream()
+        TRT_LOGGER = trt.Logger(trt.Logger.INFO)
+        runtime = trt.Runtime(TRT_LOGGER)
 
-        self.play_button.clicked.connect(self.toggle_video)
-        self.switch_button.clicked.connect(self.switch_source)
-        self.connect_button.clicked.connect(self.connect_serial)
-        self.clear_button.clicked.connect(self.clear_text_edit)
-        self.action1_button.clicked.connect(self.action1)
-        self.action2_button.clicked.connect(self.action2)
-        self.action3_button.clicked.connect(self.action3)
-        self.action4_button.clicked.connect(self.action4)
-        self.Reset_button.clicked.connect(self.Reset)
-        self.Save_button.clicked.connect(self.SaveBackground)
-        self.data_received.connect(self.update_uart_output)
-        self.Start.clicked.connect(self.StartRun)
+        # 反序列化引擎文件
+        with open(engine_file_path, "rb") as f:
+            engine = runtime.deserialize_cuda_engine(f.read())
+        self.context = engine.create_execution_context()
 
-        #yolo初始化部分
-        ctypes.CDLL("libmyplugins.so")
-        self.categories = ['Hazardous waste', 'Kitchen waste', 'Other waste', 'Recyclable waste']
-        self.colors = [(0, 0, 255), (255, 0, 0), (244, 164, 96), (0, 255, 0)]
-        self.yolov7_wrapper = YoLov7TRT("yolov7-tiny.engine")
-
-        self.infer_start_time = time.time()
-        self.infer_result = None
-        self.accumulated_category_count = {label: 0 for label in self.categories}
-
-        # 打开摄像头
-        self.camera_id = self.get_camera_id()
-        if(self.camera_id == None):
-            print("没有摄像头")
-        else:
-            print("")
-        self.video_file = '1.mp4'
-        self.cap = cv2.VideoCapture(self.video_file)
-
-        self.frame_timer_isrunning = False
-
-        self.is_playing = True #画面显示
-        self.camera_is_playing = False #摄像头正在运行
-
-        #图像更新
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(30)
-        self.log_message("Initialized video player.")
-
-        self.serial_timer = QTimer()#串口扫描
-        self.serial_timer.timeout.connect(self.update_serial_ports)
-        self.serial_timer.start(1000)  # 1000 ms = 1 Hz
-
-        self.serial_print_timer = QTimer(self)  # 创建定时器
-        self.serial_print_timer.timeout.connect(self.check_serial_data)  # 设置定时器回调函数
-        self.serial_print_timer.start(100)  # 每100毫秒（0.1秒）检查一次串口数据
-
-        self.gpio_timer = QTimer()#满载检测
-        self.gpio_timer.timeout.connect(self.update_gpio_values)
-        self.gpio_timer.start(1000)  # 1000 ms = 1 Hz
-
-        self.Reset_timer = QTimer()#图像结果处理定时器
-        self.Reset_timer_isOn = False
-        self.Reset_timer.setSingleShot(True)  # 设置为一次性定时器
-        self.Reset_timer.timeout.connect(self.Reset_Accumulated)
-
-    def check_serial_data(self):
-        """定时检查串口数据并打印到终端"""
-        try:
-            if self.serial_port and self.serial_port.in_waiting > 0:
-                data = self.serial_port.readline().decode('utf-8').strip()  # 读取数据
-                if data:
-                    print(f"收到数据: {data}")  # 打印到终端，中文支持
-                    self.data_received.emit(data)  # 触发信号（如果需要的话）
-        except serial.SerialException as e:
-            print(f"串口错误: {e}")
-        except UnicodeDecodeError as e:
-            print(f"解码错误: {e}")
-        except Exception as e:
-            print(f"读取串口数据时发生错误: {e}")
-
-    def update_uart_output(self,str):
-        print(str)
-
-    def get_camera_id(self):
-        # 尝试从多个 ID 中找到第一个有效的摄像头
-        for camera_id in range(2):  # 假设最多有 10 个摄像头
-            cap = cv2.VideoCapture(camera_id)
-            if cap.isOpened():
-                cap.release()
-                print(f"Camera found at ID {camera_id}")
-                return camera_id
-        print("No camera found")
-        return None  # 如果没有找到摄像头，则返回 None
-
-    def SaveBackground(self):
-            if self.camera_is_playing:
-                ret, frame = self.cap.read()
-                if ret:
-                    Save_Background(frame)
-                    self.log_message(f"保存背景成功: background.jpg")
-                else:
-                    self.log_message("保存背景失败")
+        # 初始化输入输出缓冲区
+        self.host_inputs, self.cuda_inputs = [], []
+        self.host_outputs, self.cuda_outputs = [], []
+        self.bindings = []
+        for binding in engine:
+            size = trt.volume(engine.get_binding_shape(binding)) * engine.max_batch_size
+            dtype = trt.nptype(engine.get_binding_dtype(binding))
+            host_mem = cuda.pagelocked_empty(size, dtype)
+            cuda_mem = cuda.mem_alloc(host_mem.nbytes)
+            self.bindings.append(int(cuda_mem))
+            if engine.binding_is_input(binding):
+                self.input_w = engine.get_binding_shape(binding)[-1]
+                self.input_h = engine.get_binding_shape(binding)[-2]
+                self.host_inputs.append(host_mem)
+                self.cuda_inputs.append(cuda_mem)
             else:
-                self.log_message("摄像头未工作，保存背景失败")
+                self.host_outputs.append(host_mem)
+                self.cuda_outputs.append(cuda_mem)
 
-    def Reset_Accumulated(self):#超时清零
-        most_frequent_category = max(self.accumulated_category_count, key=self.accumulated_category_count.get)
-        self.accumulated_category_count.update({label: 0 for label in self.categories})
-        num = self.categories.index(most_frequent_category)
-        self.handle_action(num)
-        self.categories_num = self.categories_num + 1
-        self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 is OK!")
-        self.log_message(f"Most frequent category: {most_frequent_category} with count {self.accumulated_category_count[most_frequent_category]}")
-        self.Reset_timer_isOn = False
+    def set_conf_threshold(self, category, threshold):
+        """
+        设置指定类别的置信度阈值。
 
-    def update_serial_ports(self):
-        ports = self.scan_ports()
-        self.port_combo.clear()
-        for port in ports:
-            self.port_combo.addItem(port)
+        :param category: 类别名称。
+        :param threshold: 置信度阈值（0到1之间）。
+        """
+        if category not in self.CONF_THRESH:
+            raise ValueError(f"类别 '{category}' 不存在。")
+        if not (0.0 <= threshold <= 1.0):
+            raise ValueError("置信度阈值必须在0到1之间。")
+        self.CONF_THRESH[category] = threshold
 
-    def connect_serial(self):
-        try:
-            if self.uart_running:
-                self.uart_stop()
-                self.connect_button.setText("连接串口")  # Change to "Connect Serial Port"
-                self.log_message("Disconnected from serial port.")
-            else:
-                selected_port = self.port_combo.currentText()
-                self.connect_to_port(selected_port)
-                self.uart_start()
-                self.connect_button.setText("断开串口")  # Change to "Disconnect Serial Port"
-                self.log_message(f"Connected to serial port: {selected_port}")
-        except Exception as e:
-            self.log_message(f"Error: {str(e)}")  # Log the error message
-            self.connect_button.setText("连接串口")  # Reset button text to "Connect Serial Port"
-            self.log_message("Failed to connect/disconnect from serial port.")
+    def get_conf_threshold(self, category):
+        """
+        获取指定类别的置信度阈值。
 
-    def display_uart_data(self, data):
-        self.text_uart.append(data)
+        :param category: 类别名称。
+        :return: 置信度阈值。
+        """
+        if category not in self.CONF_THRESH:
+            raise ValueError(f"类别 '{category}' 不存在。")
+        return self.CONF_THRESH[category]
 
-    def clear_text_edit(self):
-        self.text_log.clear()
+    def infer(self, input_image):
+        self.ctx.push()
+        np.copyto(self.host_inputs[0], input_image.ravel())
+        cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
+        self.context.execute_async(batch_size=1, bindings=self.bindings, stream_handle=self.stream.handle)
+        cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
+        self.stream.synchronize()
+        self.ctx.pop()
+        return self.host_outputs[0]
 
-    def log_message(self, message):
-        self.text_log.append(message)
-
-    def StartRun(self):
-            if self.camera_is_playing:
-                pass
-            else:
-                if self.cap.isOpened():
-                    self.cap.release()
-                self.cap = cv2.VideoCapture(self.camera_id)
-                self.log_message(f"Switched to camera: {self.camera_id}")
-                self.camera_is_playing = True
-
-    def update_gpio_values(self):
-        gpio_values = self.gpio_reader.read_pin_states()
-        labels = ["满载", "满载", "满载", "满载"]
-        # "有害垃圾","厨余垃圾","其他垃圾","可回收垃圾"
-        if self.Servo_Angle == 90:
-            self.gpio_table.setItem(0, 0, QTableWidgetItem(labels[0] if gpio_values.get(self.gpios[3]) else f"未{labels[0]}"))
-            self.gpio_table.setItem(1, 0, QTableWidgetItem(labels[1] if gpio_values.get(self.gpios[2]) else f"未{labels[1]}"))
-            self.gpio_table.setItem(2, 0, QTableWidgetItem(labels[2] if gpio_values.get(self.gpios[1]) else f"未{labels[2]}"))
-            self.gpio_table.setItem(3, 0, QTableWidgetItem(labels[3] if gpio_values.get(self.gpios[0]) else f"未{labels[3]}"))
-        elif self.Servo_Angle == 180:
-            self.gpio_table.setItem(0, 0, QTableWidgetItem(labels[0] if gpio_values.get(self.gpios[3]) else f"未{labels[0]}"))
-            self.gpio_table.setItem(1, 0, QTableWidgetItem(labels[1] if gpio_values.get(self.gpios[2]) else f"未{labels[1]}"))
-            self.gpio_table.setItem(2, 0, QTableWidgetItem(labels[2] if gpio_values.get(self.gpios[1]) else f"未{labels[2]}"))
-            self.gpio_table.setItem(3, 0, QTableWidgetItem(labels[3] if gpio_values.get(self.gpios[0]) else f"未{labels[3]}"))
-        elif self.Servo_Angle == 270:
-            self.gpio_table.setItem(0, 0, QTableWidgetItem(labels[0] if gpio_values.get(self.gpios[2]) else f"未{labels[0]}"))
-            self.gpio_table.setItem(1, 0, QTableWidgetItem(labels[1] if gpio_values.get(self.gpios[1]) else f"未{labels[1]}"))
-            self.gpio_table.setItem(2, 0, QTableWidgetItem(labels[2] if gpio_values.get(self.gpios[0]) else f"未{labels[2]}"))
-            self.gpio_table.setItem(3, 0, QTableWidgetItem(labels[3] if gpio_values.get(self.gpios[3]) else f"未{labels[3]}"))
-        elif self.Servo_Angle == 0:
-            self.gpio_table.setItem(0, 0, QTableWidgetItem(labels[0] if gpio_values.get(self.gpios[1]) else f"未{labels[0]}"))
-            self.gpio_table.setItem(1, 0, QTableWidgetItem(labels[1] if gpio_values.get(self.gpios[4]) else f"未{labels[1]}"))
-            self.gpio_table.setItem(2, 0, QTableWidgetItem(labels[2] if gpio_values.get(self.gpios[3]) else f"未{labels[2]}"))
-            self.gpio_table.setItem(3, 0, QTableWidgetItem(labels[3] if gpio_values.get(self.gpios[2]) else f"未{labels[3]}"))
-
-
-        states = gpio_values.get(26)
-        if states == self.last2states and states != self.laststates:
-            self.last2states = self.laststates
-            self.laststates = states
-            self.StartRun()
-        if self.last2states == self.laststates:
-            self.laststates = states
-        print(f"引脚状态：{self.last2states} {self.laststates} {states}")
-
-    def toggle_video(self):
-        if not self.cap.isOpened():
-            self.log_message("Error: 摄像头未打开")  # "Error: Camera not opened"
-            return
-        if self.is_playing:
-            self.timer.stop()
-            self.play_button.setText("开始")  # "Start"
-            self.log_message("Paused playback.")
+    def preprocess_image(self, image):
+        h, w, _ = image.shape
+        r_w = self.input_w / w
+        r_h = self.input_h / h
+        if r_h > r_w:
+            tw, th = self.input_w, int(r_w * h)
+            tx1, ty1 = 0, int((self.input_h - th) / 2)
+            tx2, ty2 = 0, self.input_h - th - ty1
         else:
-            if self.camera_is_playing:
-                self.timer.start(1)
-            else:
-                self.timer.start(30)
-            self.play_button.setText("暂停")  # "Pause"
-            self.log_message("Started playback.")
-        self.is_playing = not self.is_playing
+            tw, th = int(r_h * w), self.input_h
+            tx1, ty1 = int((self.input_w - tw) / 2), 0
+            tx2, ty2 = self.input_w - tw - tx1, 0
 
+        image = cv2.resize(image, (tw, th))
+        image = cv2.copyMakeBorder(image, ty1, ty2, tx1, tx2, cv2.BORDER_CONSTANT, value=(128, 128, 128))
+        image = np.transpose(image.astype(np.float32), [2, 0, 1]) / 255.0
+        return np.ascontiguousarray(np.expand_dims(image, axis=0)), image
 
-    def switch_source(self):
-        if self.cap.isOpened():
-            self.cap.release()
-        if self.camera_is_playing:
-            self.camera_is_playing = not self.camera_is_playing
-            self.cap = cv2.VideoCapture(self.video_file)
-            self.log_message(f"Switched to video: {self.video_file}")
+    def post_process(self, output, origin_h, origin_w):
+        num = int(output[0])
+        pred = np.reshape(output[1:], (-1, 6))[:num, :]
+
+        if num == 0:
+            return []
+
+        # 获取类别索引
+        class_indices = pred[:, 5].astype(int)
+        # 获取类别名称
+        class_names = [self.categories[idx] for idx in class_indices]
+        # 获取对应的置信度阈值
+        conf_thresholds = np.array([self.CONF_THRESH[name] for name in class_names], dtype=np.float32)
+        # 根据每个框的类别对应的置信度阈值过滤
+        boxes = pred[pred[:, 4] >= conf_thresholds]
+        if len(boxes) == 0:
+            return []
+
+        boxes[:, :4] = self.xywh2xyxy(origin_h, origin_w, boxes[:, :4])
+
+        confs = boxes[:, 4]
+        boxes = boxes[np.argsort(-confs)]
+
+        keep_boxes = []
+        while boxes.shape[0]:
+            current_box = boxes[0]
+            keep_boxes.append(current_box)
+            if boxes.shape[0] == 1:
+                break
+            ious = self.bbox_iou(np.expand_dims(current_box[:4], 0), boxes[1:, :4]).reshape(-1)
+            label_matches = current_box[5] == boxes[1:, 5]
+            invalid = (ious > self.IOU_THRESHOLD) & label_matches
+            boxes = boxes[1:][~invalid]
+
+        return np.stack(keep_boxes, 0) if len(keep_boxes) else np.array([])
+
+    def xywh2xyxy(self, origin_h, origin_w, x):
+        y = np.zeros_like(x)
+        r_w = self.input_w / origin_w
+        r_h = self.input_h / origin_h
+        if r_h > r_w:
+            y[:, 0] = x[:, 0] - x[:, 2] / 2
+            y[:, 2] = x[:, 0] + x[:, 2] / 2
+            y[:, 1] = x[:, 1] - x[:, 3] / 2 - (self.input_h - r_w * origin_h) / 2
+            y[:, 3] = x[:, 1] + x[:, 3] / 2 - (self.input_h - r_w * origin_h) / 2
+            y /= r_w
         else:
-            self.camera_is_playing = not self.camera_is_playing
-            self.cap = cv2.VideoCapture(self.camera_id)
-            self.log_message(f"Switched to camera: {self.camera_id}")
+            y[:, 0] = x[:, 0] - x[:, 2] / 2 - (self.input_w - r_h * origin_w) / 2
+            y[:, 2] = x[:, 0] + x[:, 2] / 2 - (self.input_w - r_h * origin_w) / 2
+            y[:, 1] = x[:, 1] - x[:, 3] / 2
+            y[:, 3] = x[:, 1] + x[:, 3] / 2
+            y /= r_h
+        return y
 
-    def accumulate_and_check_category_count(self, frame_category_count):
-        for label, count in frame_category_count.items():
-            self.accumulated_category_count[label] += count
-        total_count = sum(self.accumulated_category_count.values())
-        if total_count >= 10:
-            most_frequent_category = max(self.accumulated_category_count, key=self.accumulated_category_count.get)
-            most_frequent_index = self.categories.index(most_frequent_category)
-            self.log_message(f"Most frequent category: {most_frequent_category} with count {self.accumulated_category_count[most_frequent_category]}")
-            return most_frequent_index
-        else:
-            return None
+    def bbox_iou(self, box1, box2):
+        b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
+        b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
 
-    def update_frame(self):
-        if self.frame_timer_isrunning:
-            return
-        self.frame_timer_isrunning = False
-        ret, frame = self.cap.read()
-        if not ret:
-            self.log_message("End of video reached. Restarting...")
-            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            return
-        if self.camera_is_playing :
-                result,_ = compare_images3("background.jpg",frame)
-                if not result: #如果有异物
-                    frame_with_boxes,category_count = self.detect_image(frame)      #检测并返回图像结果和一个字典
-                    num = self.accumulate_and_check_category_count(category_count)  #满10次才会返回垃圾类型
-                    self.log_message(f"Category counts: {self.accumulated_category_count}:{sum(self.accumulated_category_count.values())}")
-                    if num is not None:
-                        self.Reset_timer.stop()
-                        self.Reset_timer_isOn = False
+        inter_rect_x1 = np.maximum(b1_x1, b2_x1)
+        inter_rect_y1 = np.maximum(b1_y1, b2_y1)
+        inter_rect_x2 = np.minimum(b1_x2, b2_x2)
+        inter_rect_y2 = np.minimum(b1_y2, b2_y2)
 
-                        self.handle_action(num)
-                        self.categories_num = self.categories_num + 1 #记录垃圾数量
-                        self.text_uart.append(f"{self.categories_num} {self.categories[num]} 1 OK!")
-                        self.accumulated_category_count.update({label: 0 for label in self.categories})
-                    if(sum(self.accumulated_category_count.values())>0): #如果检测不到垃圾 开启定时器
-                        if self.is_running:
-                            self.motor_stop()
-                        if self.Reset_timer_isOn:
-                            pass
-                        else:
-                            self.Reset_timer_isOn = True
-                            self.Reset_timer.start(5000)#5s内检测完
-                    self.SendImage2Lable(frame_with_boxes)
-                else:
-                    if not self.is_running:
-                        self.motor_start()
-                    pass
-                self.SendImage2Lable(frame)
-        else:
-            self.SendImage2Lable(frame)
-        self.frame_timer_isrunning = False
+        inter_area = np.clip(inter_rect_x2 - inter_rect_x1 + 1, 0, None) * \
+                     np.clip(inter_rect_y2 - inter_rect_y1 + 1, 0, None)
 
-    def handle_action(self, num):
-        # 创建一个字典，映射数字到对应的操作和日志
-        actions = {
-            0: ("action1", self.action1),
-            1: ("action2", self.action2),
-            2: ("action3", self.action3),
-            3: ("action4", self.action4)
-        }
+        b1_area = (b1_x2 - b1_x1 + 1) * (b1_y2 - b1_y1 + 1)
+        b2_area = (b2_x2 - b2_x1 + 1) * (b2_y2 - b2_y1 + 1)
 
-        if num is not None and num in actions:
-            action_name, action_func = actions[num]
-            self.log_message(action_name)
-            action_func()
+        return inter_area / (b1_area + b2_area - inter_area + 1e-16)
 
-    def detect_image(self,frame):
-            input_image, _ = self.yolov7_wrapper.preprocess_image(frame)
-            output = self.yolov7_wrapper.infer(input_image)
-            result_boxes = self.yolov7_wrapper.post_process(output, frame.shape[0], frame.shape[1])
+    def destroy(self):
+        self.ctx.pop()
+
+def plot_boxes(img, boxes, categories, colors):
+    """
+    在图像上绘制检测到的边界框。
+
+    :param img: 原始图像。
+    :param boxes: 检测到的边界框数组。
+    :param categories: 类别名称列表。
+    :param colors: 每个类别对应的颜色列表。
+    :return: 绘制了边界框的图像和每个类别的计数字典。
+    """
+    # 初始化一个字典来计数每个类别
+    category_count = {label: 0 for label in categories}
+
+    for box in boxes:
+        x1, y1, x2, y2 = map(int, box[:4])
+        label_idx = int(box[5])
+        label = categories[label_idx]
+        color = colors[label_idx]
+
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(img, f"{label}:{box[4]:.2f}", (x1, y1 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+        if label in category_count:
+            category_count[label] += 1
+    return img, category_count
+
+if __name__ == "__main__":
+    engine_file_path = "yolov7-tiny.engine"
+    ctypes.CDLL("libmyplugins.so")
+    categories = ['Hazardous waste', 'Kitchen waste', 'Other waste', 'Recyclable waste']
+    colors = [(0, 0, 255), (255, 0, 0), (244, 164, 96), (0, 255, 0)]
+
+    # 初始化YOLOv7 TRT推理器
+    yolov7_wrapper = YoLov7TRT(engine_file_path, categories=categories)
+
+    # 设置每个类别的置信度阈值
+    # 例如：'Hazardous waste': 0.6, 'Kitchen waste': 0.5, 'Other waste': 0.4, 'Recyclable waste': 0.7
+    yolov7_wrapper.set_conf_threshold('Hazardous waste', 0.6)
+    yolov7_wrapper.set_conf_threshold('Kitchen waste', 0.5)
+    yolov7_wrapper.set_conf_threshold('Other waste', 0.4)
+    yolov7_wrapper.set_conf_threshold('Recyclable waste', 0.7)
+
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+    try:
+        frame_count = 0
+        start_time = time.time()
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame_count += 1
+            input_image, resized_image = yolov7_wrapper.preprocess_image(frame)
+            # 记录推理开始时间
+            infer_start_time = time.time()
+            output = yolov7_wrapper.infer(input_image)
+            result_boxes = yolov7_wrapper.post_process(output, frame.shape[0], frame.shape[1])
             # 记录推理结束时间
             infer_end_time = time.time()
             # 计算推理时间（毫秒）
-            infer_time = infer_end_time - self.infer_start_time
-            self.infer_start_time = infer_end_time
-            fps = 1 / infer_time
+            infer_time = (infer_end_time - infer_start_time) * 1000
+            # 显示FPS
+            elapsed_time = time.time() - start_time
+            fps = frame_count / elapsed_time
             cv2.putText(frame, f"FPS: {fps:.2f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            return plot_boxes(frame, result_boxes, self.categories, self.colors)
-
-    def SendImage2Lable(self,frame):
-        frame = cv2.resize(frame, self.video_size)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        height, width, channels = frame.shape
-        bytes_per_line = channels * width
-        q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        self.video_label.setPixmap(QPixmap.fromImage(q_image))
-
-    def closeEvent(self, event):
-        if self.cap.isOpened():
-            self.cap.release()  # Release the video capture object
-        self.uart_stop()  # Stop the serial thread
-        event.accept()  # Accept the event to close the window
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    player = VideoPlayer()
-    player.show()
-    sys.exit(app.exec_())
+            frame_with_boxes, str_label = plot_boxes(frame, result_boxes, categories, colors)
+            # 打印推理耗时
+            print(f"Inference time: {infer_time:.2f} ms")
+            cv2.imshow("YOLOv7 Inference", frame_with_boxes)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        yolov7_wrapper.destroy()
